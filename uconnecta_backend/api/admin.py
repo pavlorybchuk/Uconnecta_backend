@@ -1,12 +1,25 @@
 from django.contrib import admin
-import models
-# Register your models here.
+from .models import (
+    User,
+    Profile,
+    Chat,
+    ChatParticipant,
+    BlockedUser,
+    Message,
+    Rate,
+    PasswordReset,
+    Car,
+    Call
+)
 
-admin.site.register(models.User)
-admin.site.register(models.Profile)
-admin.site.register(models.Chat)
-admin.site.register(models.ChatParticipant)
-admin.site.register(models.BlockedUser)
-admin.site.register(models.Message)
-admin.site.register(models.Rate)
-admin.site.register(models.PasswordReset)
+
+admin.site.register(User)
+admin.site.register(Profile)
+admin.site.register(Chat)
+admin.site.register(ChatParticipant)
+admin.site.register(BlockedUser)
+admin.site.register(Message)
+admin.site.register(Rate)
+admin.site.register(PasswordReset)
+admin.site.register(Call)
+admin.site.register(Car)

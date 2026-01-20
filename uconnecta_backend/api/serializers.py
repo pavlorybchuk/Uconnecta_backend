@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Profile, Chat, ChatParticipant, Message, Rate, BlockedUser, PasswordReset
+from .models import Profile, Chat, ChatParticipant, Message, Rate, BlockedUser, PasswordReset, Call, Car
 
 User = get_user_model()
 
@@ -60,6 +60,14 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ["id", "chat", "sender", "body", "created_at"]
         read_only_fields = ["id", "created_at", "sender"]
 
+class CarSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Car
+        fields = ["car_number"]
+        read_only_fields = ["car_number"]
+
 class ChatSerializer(serializers.ModelSerializer):
     participants = ChatParticipantSerializer(source="chatparticipant_set", many=True, read_only=True)
     messages = MessageSerializer(source="message_set", many=True, read_only=True)
@@ -105,3 +113,22 @@ class LocalPasswordSerializer(serializers.ModelSerializer):
         instance.local_password = validated_data["local_password"]
         instance.save()
         return instance
+    
+class CallSerializer(serializers.ModelSerializer):
+    caller_username = serializers.CharField(source="caller.username", read_only=True)
+    receiver_username = serializers.CharField(source="receiver.username", read_only=True)
+
+    class Meta:
+        model = Call
+        fields = [
+            "id",
+            "caller",
+            "caller_username",
+            "receiver",
+            "receiver_username",
+            "started_at",
+            "ended_at",
+            "status",
+            "call_token",
+        ]
+        read_only_fields = ["id", "caller_username", "receiver_username", "started_at", "ended_at", "call_token"]

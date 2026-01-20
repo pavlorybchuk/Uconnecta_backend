@@ -1,13 +1,28 @@
+import os
 import uuid
 from django.db import models
 from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
     PermissionsMixin,
+    Group,
+    Permission,
 )
 from django.utils import timezone
-from django.contrib.postgres.fields import JSONField
+from django.db.models import JSONField
 
+
+def default_settings():
+    return {
+        "auto_delete_chats": False,
+        "show_nickname": True,
+        "allow_calls": True
+    }
+
+def profile_photo_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join("profile_photos", filename)
 
 class UserManager(BaseUserManager):
     def create_user(self, email, phone, username, password=None, **extra_fields):
@@ -56,6 +71,17 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     is_staff = models.BooleanField(default=False)
 
+    groups = models.ManyToManyField(
+        Group,
+        related_name="custom_user_set",
+        blank=True,
+    )
+    user_permissions = models.ManyToManyField(
+        Permission,
+        related_name="custom_user_set",
+        blank=True,
+    )
+
     objects = UserManager()
 
     USERNAME_FIELD = "email"
@@ -66,22 +92,27 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, related_name="profile")
     name = models.CharField(max_length=50, blank=True, null=True)
     surname = models.CharField(max_length=50, blank=True, null=True)
     patronymic = models.CharField(max_length=50, blank=True, null=True)
     how_to_address = models.CharField(max_length=30, blank=True, null=True)
-    photo = models.CharField(max_length=255, blank=True, null=True)
+    photo = models.ImageField(upload_to=profile_photo_path, blank=True, null=True)
     about = models.TextField(blank=True, null=True)
-    settings = JSONField(
-        default='{"auto_delete_messages": false, "show_nickname": true, "allow_calls": true}'
-    )
+    settings = JSONField(default=default_settings)
 
 
 class Chat(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(default=timezone.now)
     last_message = models.DateTimeField(blank=True, null=True)
+
+class Car(models.Model):
+    car_number = models.CharField(max_length=8, primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.car_number}"
 
 
 class ChatParticipant(models.Model):
@@ -137,3 +168,17 @@ class PasswordReset(models.Model):
     expires_at = models.DateTimeField()
     used = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
+
+
+class Call(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name="calls_made")
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="calls_received")
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[('ringing', 'Ringing'), ('in_progress', 'In Progress'), ('ended', 'Ended')],
+        default='ringing'
+    )
+    call_token = models.CharField(max_length=255, blank=True, null=True)
