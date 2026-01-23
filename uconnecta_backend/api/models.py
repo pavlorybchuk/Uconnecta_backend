@@ -1,28 +1,24 @@
 import os
 import uuid
 from django.db import models
-from django.contrib.auth.models import (
-    AbstractBaseUser,
-    BaseUserManager,
-    PermissionsMixin,
-    Group,
-    Permission,
-)
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin, Group, Permission
 from django.utils import timezone
 from django.db.models import JSONField
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 def default_settings():
     return {
         "auto_delete_chats": False,
         "show_nickname": True,
-        "allow_calls": True
+        "allow_calls": True,
     }
 
+
 def profile_photo_path(instance, filename):
-    ext = filename.split('.')[-1]
-    filename = f"{uuid.uuid4()}.{ext}"
-    return os.path.join("profile_photos", filename)
+    ext = filename.split(".")[-1]
+    return os.path.join("profile_photos", f"{uuid.uuid4()}.{ext}")
+
 
 class UserManager(BaseUserManager):
     def create_user(self, email, phone, username, password=None, **extra_fields):
@@ -50,37 +46,28 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, phone, username, password=None, **extra_fields):
-        if not password:
-            raise ValueError("Superuser must have a password")
-
         extra_fields["is_staff"] = True
         extra_fields["is_superuser"] = True
-
         return self.create_user(email, phone, username, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=16, unique=True)
-    country_code = models.CharField(max_length=2)
+    country_code = models.CharField(max_length=2, blank=True, default="UA")
+
     isPremium = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
+
     username = models.CharField(max_length=8, unique=True)
     local_password = models.CharField(max_length=255, blank=True, null=True)
 
     is_staff = models.BooleanField(default=False)
 
-    groups = models.ManyToManyField(
-        Group,
-        related_name="custom_user_set",
-        blank=True,
-    )
-    user_permissions = models.ManyToManyField(
-        Permission,
-        related_name="custom_user_set",
-        blank=True,
-    )
+    groups = models.ManyToManyField(Group, related_name="custom_user_set", blank=True)
+    user_permissions = models.ManyToManyField(Permission, related_name="custom_user_set", blank=True)
 
     objects = UserManager()
 
@@ -96,65 +83,84 @@ class Profile(models.Model):
     name = models.CharField(max_length=50, blank=True, null=True)
     surname = models.CharField(max_length=50, blank=True, null=True)
     patronymic = models.CharField(max_length=50, blank=True, null=True)
+
     how_to_address = models.CharField(max_length=30, blank=True, null=True)
     photo = models.ImageField(upload_to=profile_photo_path, blank=True, null=True)
     about = models.TextField(blank=True, null=True)
+
     settings = JSONField(default=default_settings)
 
 
-class Chat(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    created_at = models.DateTimeField(default=timezone.now)
-    last_message = models.DateTimeField(blank=True, null=True)
-
 class Car(models.Model):
     car_number = models.CharField(max_length=8, primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cars")
 
     def __str__(self):
         return f"{self.user.username} - {self.car_number}"
 
 
+class Chat(models.Model):
+    CHAT_TYPES = (("direct", "Direct"),)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    type = models.CharField(max_length=10, choices=CHAT_TYPES, default="direct")
+
+    created_at = models.DateTimeField(default=timezone.now)
+    last_message_at = models.DateTimeField(blank=True, null=True)
+
+    direct_key = models.CharField(max_length=80, unique=True, blank=True, null=True)
+
+
 class ChatParticipant(models.Model):
-    chat = models.ForeignKey(Chat, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="participants")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="chat_participations")
+
     deleted_at = models.DateTimeField(blank=True, null=True)
     auto_delete = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ("chat", "user")
 
+def chat_image_path(instance, filename):
+    ext = filename.split(".")[-1]
+    return os.path.join("chat_images", f"{uuid.uuid4()}.{ext}")
 
 class Message(models.Model):
-    chat = models.ForeignKey(Chat, on_delete=models.CASCADE)
-    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="messages_sent")
     body = models.TextField()
     created_at = models.DateTimeField(default=timezone.now)
+    image = models.ImageField(upload_to=chat_image_path, blank=True, null=True)
 
     class Meta:
-        unique_together = ("chat", "sender")
+        indexes = [models.Index(fields=["chat", "-created_at"])]
 
 
 class Rate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    addressee = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="rates_received"
+    addressee = models.ForeignKey(User, on_delete=models.CASCADE, related_name="rates_received")
+    sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rates_given")
+    rate = models.DecimalField(
+        max_digits=2,
+        decimal_places=1,
+        validators=[
+            MinValueValidator(0.0),
+            MaxValueValidator(5.0),
+        ],
     )
-    sender = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="rates_given",
-    )
-    rate = models.DecimalField(max_digits=2, decimal_places=1)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(rate__gte=0.0) & models.Q(rate__lte=5.0),
+                name="rate_between_0_and_5",
+            )
+        ]
 
 
 class BlockedUser(models.Model):
     blocker = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blocking")
-    blocked = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="blocked_by"
-    )
+    blocked = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blocked_by")
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -174,11 +180,19 @@ class Call(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name="calls_made")
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="calls_received")
+
     started_at = models.DateTimeField(default=timezone.now)
+    answered_at = models.DateTimeField(blank=True, null=True)
     ended_at = models.DateTimeField(blank=True, null=True)
+
     status = models.CharField(
         max_length=20,
-        choices=[('ringing', 'Ringing'), ('in_progress', 'In Progress'), ('ended', 'Ended')],
-        default='ringing'
+        choices=[
+            ("ringing", "Ringing"),
+            ("in_progress", "In Progress"),
+            ("rejected", "Rejected"),
+            ("ended", "Ended"),
+            ("missed", "Missed"),
+        ],
+        default="ringing",
     )
-    call_token = models.CharField(max_length=255, blank=True, null=True)

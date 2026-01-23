@@ -1,30 +1,36 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import (
-    UserViewSet, ProfileViewSet, ChatViewSet,
-    ChatParticipantViewSet, MessageViewSet,
-    RateViewSet, BlockedUserViewSet, PasswordResetViewSet, search_user
-)
-from django.conf import settings
-from django.conf.urls.static import static
 
-router = DefaultRouter()
-router.register(r'users', UserViewSet)
-router.register(r'profiles', ProfileViewSet)
-router.register(r'chats', ChatViewSet)
-router.register(r'participants', ChatParticipantViewSet)
-router.register(r'messages', MessageViewSet)
-router.register(r'rates', RateViewSet)
-router.register(r'blocked', BlockedUserViewSet)
-router.register(r'password-resets', PasswordResetViewSet)
+from .views import (
+    AcceptCallView, AddCarView, BlockUserView, CreateCallView, DeleteCarView, DeleteMessageView, EndCallView, IceServersView, RegisterView, RejectCallView, SearchUserView,
+    MeView, MeSettingsView,
+    ChatsListView, CreateDirectChatView,
+    DeleteChatForMeView, DeleteChatForAllView,
+    ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView
+)
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('users/search/', search_user, name='search_user'),
+    path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/register/", RegisterView.as_view(), name="register"),
+    path("users/search/", SearchUserView.as_view(), name="user_search"),
+    path("me/", MeView.as_view(), name="me"),
+    path("me/settings/", MeSettingsView.as_view(), name="me_settings"),
+    path("chats/", ChatsListView.as_view(), name="chats_list"),
+    path("chats/direct/", CreateDirectChatView.as_view(), name="create_direct_chat"),
+    path("chats/<uuid:chat_id>/delete-for-me/", DeleteChatForMeView.as_view(), name="delete_for_me"),
+    path("chats/<uuid:chat_id>/delete-for-all/", DeleteChatForAllView.as_view(), name="delete_for_all"),
+    path("chats/<uuid:chat_id>/messages/", ChatMessagesView.as_view(), name="chat_messages"),
+    path("messages/delete/<int:message_id>/", DeleteMessageView.as_view(), name="delete_message"),
+    path("calls/history/", CallsHistoryView.as_view(), name="calls_history"),
+    path("blocked/", BlockedUsersListView.as_view(), name="calls_history"),
+    path("add/car/", AddCarView.as_view(), name="add_car"),
+    path("delete/car/<str:car_number>/", DeleteCarView.as_view(), name="delete_car"),
+    path("blocked/<uuid:user_id>/", UnblockUserView.as_view(), name="unblock_user"),
+    path("block/", BlockUserView.as_view(), name="block_user"),
+    path("calls/create/", CreateCallView.as_view()),
+    path("calls/<uuid:call_id>/accept/", AcceptCallView.as_view()),
+    path("calls/<uuid:call_id>/reject/", RejectCallView.as_view()),
+    path("calls/<uuid:call_id>/end/", EndCallView.as_view()),
+    path("webrtc/ice-servers/", IceServersView.as_view()),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
