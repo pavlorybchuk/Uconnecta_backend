@@ -10,7 +10,7 @@ REDIS_URL = os.getenv("REDIS_URL")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-DEBUG = False
+DEBUG = int(os.getenv("DEBUG", "0"))
 
 ALLOWED_HOSTS = (
     os.getenv("ALLOWED_HOSTS").split(", ") if os.getenv("ALLOWED_HOSTS") else []
