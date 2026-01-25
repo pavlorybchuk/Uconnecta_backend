@@ -113,9 +113,13 @@ class ChatsListView(APIView):
         chats = Chat.objects.filter(id__in=chat_ids).order_by(ordering)
         return Response(ChatListSerializer(chats, many=True).data)
 
+
 def is_blocked(a, b):
-    return BlockedUser.objects.filter(blocker=a, blocked=b).exists() or \
-           BlockedUser.objects.filter(blocker=b, blocked=a).exists()
+    return (
+        BlockedUser.objects.filter(blocker=a, blocked=b).exists()
+        or BlockedUser.objects.filter(blocker=b, blocked=a).exists()
+    )
+
 
 class CreateDirectChatView(APIView):
     """
@@ -218,8 +222,7 @@ class ChatMessagesView(APIView):
             return Response({"detail": "Forbidden"}, status=403)
 
         other = (
-            ChatParticipant.objects
-            .filter(chat_id=chat_id)
+            ChatParticipant.objects.filter(chat_id=chat_id)
             .exclude(user=request.user)
             .select_related("user")
             .first()
@@ -228,7 +231,9 @@ class ChatMessagesView(APIView):
             return Response({"detail": "Chat participant not found"}, status=400)
 
         if is_blocked(request.user, other.user):
-            return Response({"detail": "You cannot send messages to this user"}, status=403)
+            return Response(
+                {"detail": "You cannot send messages to this user"}, status=403
+            )
 
         body = (request.data.get("body") or "").strip()
         image = request.FILES.get("image")
@@ -240,14 +245,16 @@ class ChatMessagesView(APIView):
             chat_id=chat_id,
             sender=request.user,
             body=body if body else None,
-            image=image
+            image=image,
         )
 
         Message.objects.filter(id=msg.id).update()
         msg.chat.last_message_at = timezone.now()
         msg.chat.save(update_fields=["last_message_at"])
 
-        return Response(MessageSerializer(msg, context={"request": request}).data, status=201)
+        return Response(
+            MessageSerializer(msg, context={"request": request}).data, status=201
+        )
 
 
 class CallsHistoryView(APIView):
@@ -261,65 +268,62 @@ class CallsHistoryView(APIView):
         ).order_by("-started_at")
         return Response(CallSerializer(qs, many=True).data)
 
+
 class BlockedUsersListView(APIView):
     def get(self, request):
-        qs = (BlockedUser.objects
-              .filter(blocker=request.user)
-              .select_related("blocked", "blocked__profile")
-              .annotate(rating=Avg("blocked__rates_received__rate"))
-              .order_by("-created_at"))
+        qs = (
+            BlockedUser.objects.filter(blocker=request.user)
+            .select_related("blocked", "blocked__profile")
+            .annotate(rating=Avg("blocked__rates_received__rate"))
+            .order_by("-created_at")
+        )
 
         items = list(qs)
         for obj in items:
             setattr(obj.blocked, "rating", obj.rating)
 
         return Response(BlockedUserSerializer(items, many=True).data)
-    
+
+
 class AddCarView(APIView):
     def post(self, request):
         serializer = CarCreateSerializer(
-            data=request.data,
-            context={"request": request}
+            data=request.data, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
-        return Response(
-            {"car_number": car.car_number},
-            status=status.HTTP_201_CREATED
-        )
+        return Response({"car_number": car.car_number}, status=status.HTTP_201_CREATED)
+
 
 class DeleteCarView(APIView):
     def delete(self, request, car_number: str):
         car_number = car_number.upper().strip()
 
-        car = Car.objects.filter(
-            car_number=car_number,
-            user=request.user
-        ).first()
+        car = Car.objects.filter(car_number=car_number, user=request.user).first()
 
         if not car:
             return Response(
                 {"detail": "Car not found or does not belong to you"},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         car.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
+
+
 class UnblockUserView(APIView):
     def delete(self, request, user_id):
         deleted, _ = BlockedUser.objects.filter(
-            blocker=request.user,
-            blocked_id=user_id
+            blocker=request.user, blocked_id=user_id
         ).delete()
 
         if deleted == 0:
             return Response(
-                {"detail": "User is not blocked"},
-                status=status.HTTP_404_NOT_FOUND
+                {"detail": "User is not blocked"}, status=status.HTTP_404_NOT_FOUND
             )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class BlockUserView(APIView):
     def post(self, request):
@@ -335,22 +339,21 @@ class BlockUserView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+
 class DeleteMessageView(APIView):
     def delete(self, request, message_id):
-        msg = Message.objects.filter(
-            id=message_id,
-            sender=request.user
-        ).first()
+        msg = Message.objects.filter(id=message_id, sender=request.user).first()
 
         if not msg:
             return Response(
                 {"detail": "Message not found or you are not the sender"},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         msg.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
+
+
 class CreateCallView(APIView):
     def post(self, request):
         receiver_id = request.data.get("receiver_id")
@@ -370,69 +373,89 @@ class CreateCallView(APIView):
         if is_blocked(request.user, receiver):
             return Response({"detail": "Blocked"}, status=403)
 
-        call = Call.objects.create(caller=request.user, receiver=receiver, status="ringing")
+        call = Call.objects.create(
+            caller=request.user, receiver=receiver, status="ringing"
+        )
         return Response({"call_id": str(call.id), "status": call.status}, status=201)
+
 
 class AcceptCallView(APIView):
     def post(self, request, call_id):
-        call = Call.objects.select_related("caller","receiver").filter(id=call_id).first()
+        call = (
+            Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
+        )
         if not call:
-            return Response({"detail":"Not found"}, status=404)
+            return Response({"detail": "Not found"}, status=404)
         if call.receiver != request.user:
-            return Response({"detail":"Forbidden"}, status=403)
+            return Response({"detail": "Forbidden"}, status=403)
         if call.status != "ringing":
-            return Response({"detail":"Invalid state"}, status=400)
+            return Response({"detail": "Invalid state"}, status=400)
 
         call.status = "in_progress"
         call.answered_at = timezone.now() if hasattr(call, "answered_at") else None
         call.save()
         return Response({"status": call.status})
 
+
 class RejectCallView(APIView):
     def post(self, request, call_id):
-        call = Call.objects.select_related("caller","receiver").filter(id=call_id).first()
+        call = (
+            Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
+        )
         if not call:
-            return Response({"detail":"Not found"}, status=404)
+            return Response({"detail": "Not found"}, status=404)
         if call.receiver != request.user:
-            return Response({"detail":"Forbidden"}, status=403)
+            return Response({"detail": "Forbidden"}, status=403)
         if call.status != "ringing":
-            return Response({"detail":"Invalid state"}, status=400)
+            return Response({"detail": "Invalid state"}, status=400)
 
         call.status = "rejected"
         call.ended_at = timezone.now()
-        call.save(update_fields=["status","ended_at"])
+        call.save(update_fields=["status", "ended_at"])
         return Response({"status": call.status})
+
 
 class EndCallView(APIView):
     def post(self, request, call_id):
-        call = Call.objects.select_related("caller","receiver").filter(id=call_id).first()
+        call = (
+            Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
+        )
         if not call:
-            return Response({"detail":"Not found"}, status=404)
+            return Response({"detail": "Not found"}, status=404)
         if request.user not in (call.caller, call.receiver):
-            return Response({"detail":"Forbidden"}, status=403)
+            return Response({"detail": "Forbidden"}, status=403)
 
         call.status = "ended"
         call.ended_at = timezone.now()
-        call.save(update_fields=["status","ended_at"])
+        call.save(update_fields=["status", "ended_at"])
         return Response({"status": call.status})
+
 
 class CallHistoryView(APIView):
     def get(self, request):
-        qs = Call.objects.filter(Q(caller=request.user) | Q(receiver=request.user)).order_by("-started_at")
-        data = [{
-            "id": str(c.id),
-            "caller_id": str(c.caller_id),
-            "receiver_id": str(c.receiver_id),
-            "status": c.status,
-            "started_at": c.started_at,
-            "ended_at": c.ended_at,
-        } for c in qs[:100]]
+        qs = Call.objects.filter(
+            Q(caller=request.user) | Q(receiver=request.user)
+        ).order_by("-started_at")
+        data = [
+            {
+                "id": str(c.id),
+                "caller_id": str(c.caller_id),
+                "receiver_id": str(c.receiver_id),
+                "status": c.status,
+                "started_at": c.started_at,
+                "ended_at": c.ended_at,
+            }
+            for c in qs[:100]
+        ]
         return Response(data)
+
 
 class IceServersView(APIView):
     def get(self, request):
-        return Response({
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-            ]
-        })
+        return Response(
+            {
+                "iceServers": [
+                    {"urls": ["stun:stun.l.google.com:19302"]},
+                ]
+            }
+        )
