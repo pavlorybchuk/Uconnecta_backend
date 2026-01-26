@@ -97,6 +97,12 @@ TEMPLATES = [
 WSGI_APPLICATION = "uconnecta_backend.wsgi.application"
 ASGI_APPLICATION = "uconnecta_backend.asgi.application"
 
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
