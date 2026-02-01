@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth import get_user_model
 from django.db.models import Avg
 from rest_framework.parsers import MultiPartParser, FormParser
-import serializers
+from rest_framework import serializers
 from .models import BlockedUser, Car, Chat, ChatParticipant, Message, Call
 from .serializers import (
     BlockUserSerializer,
