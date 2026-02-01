@@ -40,10 +40,11 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        data = request.data.copy()
         while True:
             try:
-                request.data["username"] = generate_username()
-                s = RegisterSerializer(data=request.data)
+                data["username"] = generate_username()
+                s = RegisterSerializer(data=data)
                 s.is_valid(raise_exception=True)
                 user = s.save()
                 return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
