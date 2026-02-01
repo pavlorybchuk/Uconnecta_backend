@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth import get_user_model
 from django.db.models import Avg
 from rest_framework.parsers import MultiPartParser, FormParser
+import serializers
 from .models import BlockedUser, Car, Chat, ChatParticipant, Message, Call
 from .serializers import (
     BlockUserSerializer,
@@ -23,21 +24,36 @@ from .serializers import (
     UserPublicSerializer,
 )
 from .permissions import IsChatParticipant
+import string
+import random
 
 User = get_user_model()
 
+def generate_username():
+    chars = list(string.ascii_letters + string.digits)
+    res = ""
+    for _ in range(8):
+        res += random.choice(chars)
+    return res
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        s = RegisterSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        user = s.save()
-        return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
+        while True:
+            try:
+                request.data["username"] = generate_username()
+                s = RegisterSerializer(data=request.data)
+                s.is_valid(raise_exception=True)
+                user = s.save()
+                return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
+            except serializers.ValidationError:
+                continue 
 
 
 class SearchUserView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request):
         car_number = request.query_params.get("car_number")
         username = request.query_params.get("username")
