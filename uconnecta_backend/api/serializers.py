@@ -235,3 +235,8 @@ class BlockUserSerializer(serializers.Serializer):
             blocked_id=blocked_id
         )
         return obj
+    
+class SendEmailSerializer(serializers.Serializer):
+    to = serializers.EmailField()
+    subject = serializers.CharField(max_length=150)
+    body = serializers.CharField(max_length=5000)

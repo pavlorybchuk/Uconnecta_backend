@@ -5,7 +5,9 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.db.models import Avg
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
@@ -22,6 +24,7 @@ from .serializers import (
     MessageSerializer,
     CallSerializer,
     UserPublicSerializer,
+    SendEmailSerializer
 )
 from .permissions import IsChatParticipant
 import string
@@ -478,3 +481,28 @@ class IceServersView(APIView):
                 ]
             }
         )
+
+class SendEmailView(APIView):
+    """
+    POST /api/email/send/
+    Body: { "to": "...", "subject": "...", "body": "..." }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        s = SendEmailSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        to = s.validated_data["to"]
+        subject = s.validated_data["subject"]
+        body = s.validated_data["body"]
+
+        sent = send_mail(
+            subject=subject,
+            message=body,
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            recipient_list=[to],
+            fail_silently=False,
+        )
+
+        return Response({"sent": bool(sent)}, status=status.HTTP_200_OK)

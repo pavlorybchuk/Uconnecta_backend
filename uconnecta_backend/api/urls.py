@@ -6,7 +6,7 @@ from .views import (
     MeView, MeSettingsView,
     ChatsListView, CreateDirectChatView,
     DeleteChatForMeView, DeleteChatForAllView,
-    ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView
+    ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView, SendEmailView
 )
 
 urlpatterns = [
@@ -33,4 +33,5 @@ urlpatterns = [
     path("calls/<uuid:call_id>/reject/", RejectCallView.as_view()),
     path("calls/<uuid:call_id>/end/", EndCallView.as_view()),
     path("webrtc/ice-servers/", IceServersView.as_view()),
+    path("email/send/", SendEmailView.as_view(), name="email-send"),
 ]
