@@ -501,7 +501,7 @@ class SendEmailView(APIView):
             subject=subject,
             message=body,
             from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=[to],
+            recipient_list=[User.objects.filter(id=to).first().email],
             fail_silently=False,
         )
 
