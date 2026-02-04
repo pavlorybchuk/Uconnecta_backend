@@ -29,12 +29,14 @@ import random
 
 User = get_user_model()
 
+
 def generate_username():
     chars = list(string.ascii_letters + string.digits)
     res = ""
     for _ in range(8):
         res += random.choice(chars)
     return res
+
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -49,7 +51,7 @@ class RegisterView(APIView):
                 user = s.save()
                 return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
             except serializers.ValidationError:
-                continue 
+                continue
 
 
 class SearchUserView(APIView):
@@ -75,7 +77,7 @@ class SearchUserView(APIView):
         if not user:
             return Response({"detail": "Not found"}, status=404)
 
-        return Response(UserPublicSerializer(user).data)
+        return Response(UserPublicSerializer(user, context={"request": request}).data)
 
 
 class MeView(APIView):

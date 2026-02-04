@@ -165,10 +165,11 @@ class UserPublicSerializer(serializers.ModelSerializer):
     rating = serializers.SerializerMethodField()
     about = serializers.CharField(source="profile.about", read_only=True, allow_null=True)
     photo = serializers.ImageField(source="profile.photo", read_only=True, allow_null=True)
+    isBlocked = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "display_name", "about", "photo", "rating"]
+        fields = ["id", "username", "display_name", "about", "photo", "rating", "isBlocked"]
 
     def get_display_name(self, obj):
         profile = obj.profile
@@ -188,6 +189,20 @@ class UserPublicSerializer(serializers.ModelSerializer):
     def get_rating(self, obj):
         r = getattr(obj, "rating", None)
         return None if r is None else round(float(r), 2)
+    
+    def get_isBlocked(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return False
+
+        return BlockedUser.objects.filter(
+            blocker=request.user,
+            blocked=obj
+        ).exists() or BlockedUser.objects.filter(
+            blocker=obj,
+            blocked=request.user
+        ).exists()
 
 class BlockedUserSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
