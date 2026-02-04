@@ -169,7 +169,7 @@ class UserPublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "display_name", "about", "photo", "rating", "isBlocked"]
+        fields = ["id", "username", "display_name", "about", "photo", "rating", "isBlocked", "email"]
 
     def get_display_name(self, obj):
         profile = obj.profile
