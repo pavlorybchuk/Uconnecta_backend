@@ -1,3 +1,4 @@
+import os
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q
@@ -24,11 +25,12 @@ from .serializers import (
     MessageSerializer,
     CallSerializer,
     UserPublicSerializer,
-    SendEmailSerializer
+    SendEmailSerializer,
 )
 from .permissions import IsChatParticipant
 import string
 import random
+import requests
 
 User = get_user_model()
 
@@ -482,11 +484,13 @@ class IceServersView(APIView):
             }
         )
 
+
 class SendEmailView(APIView):
     """
     POST /api/email/send/
     Body: { "to": "...", "subject": "...", "body": "..." }
     """
+
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -497,12 +501,22 @@ class SendEmailView(APIView):
         subject = s.validated_data["subject"]
         body = s.validated_data["body"]
 
-        sent = send_mail(
-            subject=subject,
-            message=body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=[User.objects.filter(id=to).first().email],
-            fail_silently=False,
+        response = requests.post(
+            "https://api.mailgun.net/v3/sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org/messages",
+            auth=("api", os.getenv("MAILGUN_API_KEY")),
+            data={"from": "Mailgun Sandbox <postmaster@sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org>",
+			"to": User.objects.get(id=to).email,
+  			"subject": subject,
+  			"text": body
+            },
         )
 
-        return Response({"sent": bool(sent)}, status=status.HTTP_200_OK)
+        if response.status_code != 200:
+            return Response(
+                {"detail": response.text},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {"sent": response.status_code == 200}, status=status.HTTP_200_OK
+        )
