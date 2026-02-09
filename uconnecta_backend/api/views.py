@@ -26,7 +26,7 @@ from .serializers import (
     CallSerializer,
     UserPublicSerializer,
     SendEmailSerializer,
-    LogoutSerializer
+    LogoutSerializer,
 )
 from .permissions import IsChatParticipant
 import string
@@ -43,6 +43,7 @@ def generate_username():
         res += random.choice(chars)
     return res
 
+
 class LogoutView(APIView):
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
@@ -50,20 +51,52 @@ class LogoutView(APIView):
         serializer.save()
         return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
 
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         data = request.data.copy()
         while True:
-            try:
-                data["username"] = generate_username()
-                s = RegisterSerializer(data=data)
-                s.is_valid(raise_exception=True)
+            data["username"] = generate_username()
+            s = RegisterSerializer(data=data)
+            if s.is_valid():
                 user = s.save()
                 return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
-            except serializers.ValidationError:
+
+            if "username" in s.errors:
                 continue
+
+            return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data.copy()
+
+        MAX_TRIES = 30  # 30 спроб більш ніж достатньо для 8-симв. username
+
+        for _ in range(MAX_TRIES):
+            data["username"] = generate_username()
+
+            s = RegisterSerializer(data=data)
+            if s.is_valid():
+                user = s.save()
+                return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
+
+            # повторюємо ТІЛЬКИ якщо username зайнятий
+            if "username" in s.errors:
+                continue
+
+            # інші помилки повертаємо клієнту (і не зависаємо)
+            return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {"detail": "Could not generate unique username. Please try again."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
 
 class SearchUserView(APIView):
@@ -511,10 +544,11 @@ class SendEmailView(APIView):
         response = requests.post(
             "https://api.mailgun.net/v3/sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org/messages",
             auth=("api", os.getenv("MAILGUN_API_KEY")),
-            data={"from": "Mailgun Sandbox <postmaster@sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org>",
-			"to": User.objects.get(id=to).email,
-  			"subject": subject,
-  			"text": body
+            data={
+                "from": "Mailgun Sandbox <postmaster@sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org>",
+                "to": User.objects.get(id=to).email,
+                "subject": subject,
+                "text": body,
             },
         )
 
