@@ -1,9 +1,22 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Profile, Car, Chat, Message, Call, BlockedUser
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
 User = get_user_model()
 
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+    def validate(self, attrs):
+        self.token = attrs["refresh"]
+        return attrs
+
+    def save(self, **kwargs):
+        try:
+            RefreshToken(self.token).blacklist()
+        except TokenError:
+            raise serializers.ValidationError({"refresh": "Invalid or expired token"})
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()

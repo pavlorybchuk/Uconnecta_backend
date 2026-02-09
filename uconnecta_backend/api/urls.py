@@ -6,13 +6,14 @@ from .views import (
     MeView, MeSettingsView,
     ChatsListView, CreateDirectChatView,
     DeleteChatForMeView, DeleteChatForAllView,
-    ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView, SendEmailView
+    ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView, SendEmailView, LogoutView
 )
 
 urlpatterns = [
     path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/logout/", LogoutView.as_view(), name="token_logout"),
     path("users/search/", SearchUserView.as_view(), name="user_search"),
     path("me/", MeView.as_view(), name="me"),
     path("me/settings/", MeSettingsView.as_view(), name="me_settings"),

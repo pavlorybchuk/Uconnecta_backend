@@ -26,6 +26,7 @@ from .serializers import (
     CallSerializer,
     UserPublicSerializer,
     SendEmailSerializer,
+    LogoutSerializer
 )
 from .permissions import IsChatParticipant
 import string
@@ -42,6 +43,12 @@ def generate_username():
         res += random.choice(chars)
     return res
 
+class LogoutView(APIView):
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
