@@ -20,7 +20,6 @@ from .serializers import (
     RegisterSerializer,
     MeSerializer,
     MeUpdateSerializer,
-    ProfileSettingsSerializer,
     ChatListSerializer,
     MessageSerializer,
     CallSerializer,

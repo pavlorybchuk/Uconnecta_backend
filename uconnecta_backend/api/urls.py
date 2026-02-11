@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .views import (
     AcceptCallView, AddCarView, BlockUserView, CreateCallView, DeleteCarView, DeleteMessageView, EndCallView, IceServersView, RegisterView, RejectCallView, SearchUserView,
-    MeView, MeSettingsView,
+    MeView,
     ChatsListView, CreateDirectChatView,
     DeleteChatForMeView, DeleteChatForAllView,
     ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView, SendEmailView, LogoutView
