@@ -101,9 +101,13 @@ class MeSerializer(serializers.ModelSerializer):
     profile = ProfilePublicSerializer(read_only=True)
     cars = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
 
     def get_cars(self, obj):
         return list(obj.cars.values_list("car_number", flat=True))
+
+    def get_has_password(self, obj):
+        return bool(obj.local_password)
 
     class Meta:
         model = User
@@ -116,6 +120,7 @@ class MeSerializer(serializers.ModelSerializer):
             "profile",
             "cars",
             "rating",
+            "has_password",
         ]
 
     def get_rating(self, obj):
