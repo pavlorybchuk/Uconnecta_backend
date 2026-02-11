@@ -57,8 +57,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=16, unique=True)
     country_code = models.CharField(max_length=2, blank=True, default="UA")
-
-    isPremium = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
 
     username = models.CharField(max_length=8, unique=True)

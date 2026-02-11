@@ -10,11 +10,11 @@ User = get_user_model()
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ("email", "username", "phone", "isPremium", "is_staff", "created_at")
-    list_filter = ("isPremium", "is_staff")
+    list_display = ("email", "username", "phone", "is_staff", "created_at")
+    list_filter = ("is_staff", )
     search_fields = ("email", "username", "phone")
     ordering = ("-created_at",)
-    readonly_fields = ("created_at", "isPremium")
+    readonly_fields = ("created_at", )
 
 
 @admin.register(Profile)

@@ -113,10 +113,8 @@ class MeSerializer(serializers.ModelSerializer):
             "how_to_address",
             "profile",
             "cars",
-            "isPremium",
             "rating",
         ]
-        read_only_fields = ["isPremium"]
 
     def get_rating(self, obj):
         r = getattr(obj, "rating", None)
