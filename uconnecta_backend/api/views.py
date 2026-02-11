@@ -70,35 +70,6 @@ class RegisterView(APIView):
             return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        data = request.data.copy()
-
-        MAX_TRIES = 30  # 30 спроб більш ніж достатньо для 8-симв. username
-
-        for _ in range(MAX_TRIES):
-            data["username"] = generate_username()
-
-            s = RegisterSerializer(data=data)
-            if s.is_valid():
-                user = s.save()
-                return Response({"id": str(user.id)}, status=status.HTTP_201_CREATED)
-
-            # повторюємо ТІЛЬКИ якщо username зайнятий
-            if "username" in s.errors:
-                continue
-
-            # інші помилки повертаємо клієнту (і не зависаємо)
-            return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(
-            {"detail": "Could not generate unique username. Please try again."},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-
-
 class SearchUserView(APIView):
     permission_classes = [AllowAny]
 
@@ -144,20 +115,15 @@ class MeView(APIView):
         )
         s.is_valid(raise_exception=True)
         s.save()
-        return Response(MeSerializer(request.user).data)
 
-
-class MeSettingsView(APIView):
-    def get(self, request):
-        return Response(ProfileSettingsSerializer(request.user.profile).data)
-
-    def patch(self, request):
-        s = ProfileSettingsSerializer(
-            instance=request.user.profile, data=request.data, partial=True
+        user = (
+            User.objects.select_related("profile")
+            .prefetch_related("cars")
+            .annotate(rating=Avg("rates_received__rate"))
+            .get(pk=request.user.pk)
         )
-        s.is_valid(raise_exception=True)
-        s.save()
-        return Response(s.data)
+
+        return Response(MeSerializer(user).data)
 
 
 class ChatsListView(APIView):

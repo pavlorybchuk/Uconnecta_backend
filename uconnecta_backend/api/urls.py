@@ -16,7 +16,6 @@ urlpatterns = [
     path("auth/logout/", LogoutView.as_view(), name="token_logout"),
     path("users/search/", SearchUserView.as_view(), name="user_search"),
     path("me/", MeView.as_view(), name="me"),
-    path("me/settings/", MeSettingsView.as_view(), name="me_settings"),
     path("chats/", ChatsListView.as_view(), name="chats_list"),
     path("chats/direct/", CreateDirectChatView.as_view(), name="create_direct_chat"),
     path("chats/<uuid:chat_id>/delete-for-me/", DeleteChatForMeView.as_view(), name="delete_for_me"),

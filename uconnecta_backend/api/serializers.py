@@ -53,7 +53,7 @@ class RegisterSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
-        how_to_address = validated_data.pop("how_to_address")
+        how_to_address = validated_data.pop("how_to_address", "")
         validated_data.pop("repeat_password")
 
         user = User.objects.create_user(**validated_data)
@@ -83,13 +83,15 @@ class CarCreateSerializer(serializers.ModelSerializer):
 class ProfilePublicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        exclude = ["settings"]
-
-
-class ProfileSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Profile
-        fields = ["settings"]
+        fields = [
+            "name",
+            "surname",
+            "patronymic",
+            "how_to_address",
+            "photo",
+            "about",
+            "settings",
+        ]
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -167,6 +169,24 @@ class MeUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Username already exists")
         return v
 
+    def validate_settings(self, value):
+        allowed = {"auto_delete_chats", "show_nickname", "allow_calls"}
+
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("settings must be an object")
+
+        unknown = set(value.keys()) - allowed
+        if unknown:
+            raise serializers.ValidationError(
+                f"Unknown keys: {', '.join(sorted(unknown))}"
+            )
+
+        for k, v in value.items():
+            if not isinstance(v, bool):
+                raise serializers.ValidationError(f"{k} must be boolean")
+
+        return value
+
     def update(self, instance, validated_data):
         profile = instance.profile
 
@@ -174,13 +194,17 @@ class MeUpdateSerializer(serializers.Serializer):
             if f in validated_data:
                 setattr(instance, f, validated_data[f])
 
+        if "settings" in validated_data:
+            current = profile.settings or {}
+            current.update(validated_data["settings"])
+            profile.settings = current
+
         for f in [
             "name",
             "surname",
             "patronymic",
             "how_to_address",
             "about",
-            "settings",
         ]:
             if f in validated_data:
                 setattr(profile, f, validated_data[f])
