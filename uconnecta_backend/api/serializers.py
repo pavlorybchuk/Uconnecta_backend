@@ -282,18 +282,19 @@ class UserPublicSerializer(serializers.ModelSerializer):
 
     def get_display_name(self, obj):
         profile = obj.profile
-
         show_nickname = profile.settings.get("show_nickname", True)
 
         if show_nickname:
-            return profile.how_to_address
+            return profile.how_to_address or None
+
         parts = [
             profile.surname,
             profile.name,
             profile.patronymic,
         ]
-        full_name = " ".join(p for p in parts if p)
-        return full_name or profile.how_to_address
+        full_name = " ".join(p for p in parts if p).strip()
+
+        return full_name or profile.how_to_address or None
 
     def get_rating(self, obj):
         r = getattr(obj, "rating", None)
