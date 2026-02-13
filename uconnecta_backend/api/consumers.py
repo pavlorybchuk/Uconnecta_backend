@@ -1,5 +1,5 @@
 import json
-from time import timezone
+from django.utils import timezone
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
@@ -140,5 +140,5 @@ class ChatConsumer(AsyncWebsocketConsumer):
             sender=user,
             body=body
         )
-        Chat.objects.filter(id=chat_id).update(last_message=timezone.now())
+        Chat.objects.filter(id=chat_id).update(last_message_at=timezone.now())
         return msg

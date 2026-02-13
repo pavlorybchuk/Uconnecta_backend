@@ -505,13 +505,18 @@ class SendEmailView(APIView):
         to = s.validated_data["to"]
         subject = s.validated_data["subject"]
         body = s.validated_data["body"]
+        user_to = User.objects.filter(id=to).first()
+        if not user_to:
+            return Response(
+                {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         response = requests.post(
             "https://api.mailgun.net/v3/sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org/messages",
             auth=("api", os.getenv("MAILGUN_API_KEY")),
             data={
                 "from": "Mailgun Sandbox <postmaster@sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org>",
-                "to": User.objects.get(id=to).email,
+                "to": user_to.email,
                 "subject": subject,
                 "text": body,
             },

@@ -23,7 +23,7 @@ class LogoutSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=16)
-    username = serializers.CharField(max_length=8)
+    username = serializers.CharField(max_length=8, required=False)
     password = serializers.CharField(write_only=True, min_length=6)
     repeat_password = serializers.CharField(write_only=True, min_length=6)
     how_to_address = serializers.CharField(
@@ -53,6 +53,9 @@ class RegisterSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
+        username = validated_data.get("username")
+        if not username:
+            raise serializers.ValidationError({"username": "Username generation failed"})
         how_to_address = validated_data.pop("how_to_address", "")
         validated_data.pop("repeat_password")
 
