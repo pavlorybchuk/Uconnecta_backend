@@ -129,18 +129,58 @@ class ChatsListView(APIView):
     """
     /api/chats?sort=last_message|created_at
     Повертає тільки ті чати, де користувач не видалив чат (deleted_at is null)
+    + додає other_user та auto_delete для UI
     """
 
     def get(self, request):
         sort = request.query_params.get("sort", "last_message")
         ordering = "-last_message_at" if sort == "last_message" else "-created_at"
 
-        chat_ids = ChatParticipant.objects.filter(
-            user=request.user, deleted_at__isnull=True
-        ).values_list("chat_id", flat=True)
+        my_cps = list(
+            ChatParticipant.objects.filter(
+                user=request.user, deleted_at__isnull=True
+            ).select_related("chat")
+        )
+        chat_ids = [cp.chat_id for cp in my_cps]
 
-        chats = Chat.objects.filter(id__in=chat_ids).order_by(ordering)
-        return Response(ChatListSerializer(chats, many=True).data)
+        if not chat_ids:
+            return Response([])
+
+        auto_delete_by_chat = {cp.chat_id: cp.auto_delete for cp in my_cps}
+
+        chats = list(Chat.objects.filter(id__in=chat_ids).order_by(ordering))
+
+        other_cps = list(
+            ChatParticipant.objects.filter(chat_id__in=chat_ids)
+            .exclude(user=request.user)
+            .select_related("user", "user__profile")
+        )
+
+        other_user_ids = [cp.user_id for cp in other_cps]
+
+        others = (
+            User.objects.filter(id__in=other_user_ids)
+            .select_related("profile")
+            .annotate(rating=Avg("rates_received__rate"))
+        )
+        other_by_id = {u.id: u for u in others}
+
+        other_user_by_chat = {}
+        for cp in other_cps:
+            u = other_by_id.get(cp.user_id)
+            if u:
+                other_user_by_chat[cp.chat_id] = u
+
+        serializer = ChatListSerializer(
+            chats,
+            many=True,
+            context={
+                "request": request,
+                "auto_delete_by_chat": auto_delete_by_chat,
+                "other_user_by_chat": other_user_by_chat,
+            },
+        )
+        return Response(serializer.data)
 
 
 def is_blocked(a, b):

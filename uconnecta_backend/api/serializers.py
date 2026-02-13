@@ -55,7 +55,9 @@ class RegisterSerializer(serializers.Serializer):
     def create(self, validated_data):
         username = validated_data.get("username")
         if not username:
-            raise serializers.ValidationError({"username": "Username generation failed"})
+            raise serializers.ValidationError(
+                {"username": "Username generation failed"}
+            )
         how_to_address = validated_data.pop("how_to_address", "")
         validated_data.pop("repeat_password")
 
@@ -223,9 +225,32 @@ class MeUpdateSerializer(serializers.Serializer):
 
 
 class ChatListSerializer(serializers.ModelSerializer):
+    auto_delete = serializers.SerializerMethodField()
+    other_user = serializers.SerializerMethodField()
+
     class Meta:
         model = Chat
-        fields = ["id", "type", "created_at", "last_message_at"]
+        fields = [
+            "id",
+            "type",
+            "created_at",
+            "last_message_at",
+            "auto_delete",
+            "other_user",
+        ]
+
+    def get_auto_delete(self, chat: Chat):
+        m = self.context.get("auto_delete_by_chat") or {}
+        return bool(m.get(chat.id, False))
+
+    def get_other_user(self, chat: Chat):
+        m = self.context.get("other_user_by_chat") or {}
+        other = m.get(chat.id)
+        if not other:
+            return None
+
+        request = self.context.get("request")
+        return UserPublicSerializer(other, context={"request": request}).data
 
 
 class MessageSerializer(serializers.ModelSerializer):
