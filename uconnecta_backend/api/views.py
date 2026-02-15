@@ -148,7 +148,10 @@ class ChatsListView(APIView):
 
         auto_delete_by_chat = {cp.chat_id: cp.auto_delete for cp in my_cps}
 
-        chats = list(Chat.objects.filter(id__in=chat_ids).order_by(ordering))
+        chats = Chat.objects.filter(
+            participants__user=request.user,
+            participants__deleted_at__isnull=True,
+        ).distinct()
 
         other_cps = list(
             ChatParticipant.objects.filter(chat_id__in=chat_ids)
