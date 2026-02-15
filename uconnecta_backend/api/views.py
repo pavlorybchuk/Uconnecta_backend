@@ -1,4 +1,6 @@
 import os
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q
@@ -329,6 +331,15 @@ class ChatMessagesView(APIView):
         Message.objects.filter(id=msg.id).update()
         msg.chat.last_message_at = timezone.now()
         msg.chat.save(update_fields=["last_message_at"])
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {
+                "type": "chat.message",
+                "message": MessageSerializer(msg).data,
+            },
+        )
 
         return Response(
             MessageSerializer(msg, context={"request": request}).data, status=201
