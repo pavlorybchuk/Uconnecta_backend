@@ -285,10 +285,16 @@ class ChatMessagesView(APIView):
         return Response(MessageSerializer(msgs, many=True).data)
 
     def post(self, request, chat_id):
-        if not ChatParticipant.objects.filter(
-            chat_id=chat_id, user=request.user, deleted_at__isnull=True
-        ).exists():
+        participant = ChatParticipant.objects.filter(
+            chat=chat_id, user=request.user
+        ).first()
+
+        if not participant:
             return Response({"detail": "Forbidden"}, status=403)
+
+        if participant.deleted_at is not None:
+            participant.deleted_at = None
+            participant.save(update_fields=["deleted_at"])
 
         other = (
             ChatParticipant.objects.filter(chat_id=chat_id)
@@ -570,4 +576,32 @@ class SendEmailView(APIView):
 
         return Response(
             {"sent": response.status_code == 200}, status=status.HTTP_200_OK
+        )
+
+
+class ToggleAutoDeleteView(APIView):
+    """
+    POST /api/chats/<chat_id>/toggle-auto-delete/
+    Перемикає auto_delete для поточного користувача
+    """
+
+    def post(self, request, chat_id):
+        cp = ChatParticipant.objects.filter(
+            chat_id=chat_id,
+            user=request.user,
+            deleted_at__isnull=True,
+        ).first()
+
+        if not cp:
+            return Response({"detail": "Chat not found"}, status=404)
+
+        cp.auto_delete = not cp.auto_delete
+        cp.save(update_fields=["auto_delete"])
+
+        return Response(
+            {
+                "chat_id": str(chat_id),
+                "auto_delete": cp.auto_delete,
+            },
+            status=200,
         )

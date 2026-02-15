@@ -2,11 +2,29 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .views import (
-    AcceptCallView, AddCarView, BlockUserView, CreateCallView, DeleteCarView, DeleteMessageView, EndCallView, IceServersView, RegisterView, RejectCallView, SearchUserView,
+    AcceptCallView,
+    AddCarView,
+    BlockUserView,
+    CreateCallView,
+    DeleteCarView,
+    DeleteMessageView,
+    EndCallView,
+    IceServersView,
+    RegisterView,
+    RejectCallView,
+    SearchUserView,
     MeView,
-    ChatsListView, CreateDirectChatView,
-    DeleteChatForMeView, DeleteChatForAllView,
-    ChatMessagesView, CallsHistoryView, BlockedUsersListView, UnblockUserView, SendEmailView, LogoutView
+    ChatsListView,
+    CreateDirectChatView,
+    DeleteChatForMeView,
+    DeleteChatForAllView,
+    ChatMessagesView,
+    CallsHistoryView,
+    BlockedUsersListView,
+    UnblockUserView,
+    SendEmailView,
+    LogoutView,
+    ToggleAutoDeleteView,
 )
 
 urlpatterns = [
@@ -18,10 +36,26 @@ urlpatterns = [
     path("me/", MeView.as_view(), name="me"),
     path("chats/", ChatsListView.as_view(), name="chats_list"),
     path("chats/direct/", CreateDirectChatView.as_view(), name="create_direct_chat"),
-    path("chats/<uuid:chat_id>/delete-for-me/", DeleteChatForMeView.as_view(), name="delete_for_me"),
-    path("chats/<uuid:chat_id>/delete-for-all/", DeleteChatForAllView.as_view(), name="delete_for_all"),
-    path("chats/<uuid:chat_id>/messages/", ChatMessagesView.as_view(), name="chat_messages"),
-    path("messages/delete/<int:message_id>/", DeleteMessageView.as_view(), name="delete_message"),
+    path(
+        "chats/<uuid:chat_id>/delete-for-me/",
+        DeleteChatForMeView.as_view(),
+        name="delete_for_me",
+    ),
+    path(
+        "chats/<uuid:chat_id>/delete-for-all/",
+        DeleteChatForAllView.as_view(),
+        name="delete_for_all",
+    ),
+    path(
+        "chats/<uuid:chat_id>/messages/",
+        ChatMessagesView.as_view(),
+        name="chat_messages",
+    ),
+    path(
+        "messages/delete/<int:message_id>/",
+        DeleteMessageView.as_view(),
+        name="delete_message",
+    ),
     path("calls/history/", CallsHistoryView.as_view(), name="calls_history"),
     path("blocked/", BlockedUsersListView.as_view(), name="calls_history"),
     path("add/car/", AddCarView.as_view(), name="add_car"),
@@ -34,4 +68,8 @@ urlpatterns = [
     path("calls/<uuid:call_id>/end/", EndCallView.as_view()),
     path("webrtc/ice-servers/", IceServersView.as_view()),
     path("email/send/", SendEmailView.as_view(), name="email-send"),
+    path(
+        "chats/<uuid:chat_id>/toggle-auto-delete/",
+        ToggleAutoDeleteView.as_view(),
+    ),
 ]
