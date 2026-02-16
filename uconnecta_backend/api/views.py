@@ -264,21 +264,42 @@ class DeleteChatForMeView(APIView):
             return Response({"detail": "Not found"}, status=404)
         cp.deleted_at = timezone.now()
         cp.save(update_fields=["deleted_at"])
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {
+                "type": "chat.event",
+                "payload": {
+                    "type": "chat.deleted_for_me",
+                    "payload": {
+                        "chat_id": str(chat_id),
+                        "user_id": str(request.user.id),
+                    },
+                },
+            },
+        )
         return Response({"detail": "deleted_for_me"})
 
 
 class DeleteChatForAllView(APIView):
-    """
-    POST /api/chats/<chat_id>/delete-for-all
-    Повністю видаляє чат (і повідомлення каскадом).
-    """
-
     def post(self, request, chat_id):
         is_participant = ChatParticipant.objects.filter(
             chat_id=chat_id, user=request.user
         ).exists()
         if not is_participant:
             return Response({"detail": "Forbidden"}, status=403)
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {
+                "type": "chat.event",
+                "payload": {
+                    "type": "chat.deleted_for_all",
+                    "payload": {"chat_id": str(chat_id)},
+                },
+            },
+        )
 
         Chat.objects.filter(id=chat_id).delete()
         return Response({"detail": "deleted_for_all"})

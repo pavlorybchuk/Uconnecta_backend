@@ -120,6 +120,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
         )
 
+    async def chat_event(self, event):
+        await self.send(text_data=json.dumps(event["payload"]))
+
     async def chat_message_edited(self, event):
         await self.send(
             text_data=json.dumps(
