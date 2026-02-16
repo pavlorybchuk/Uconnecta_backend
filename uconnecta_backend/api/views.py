@@ -14,7 +14,15 @@ from django.conf import settings
 from django.db.models import Avg
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
-from .models import BlockedUser, Car, Chat, ChatParticipant, Message, Call
+from .models import (
+    BlockedUser,
+    Car,
+    Chat,
+    ChatParticipant,
+    DeletedMessage,
+    Message,
+    Call,
+)
 from .serializers import (
     BlockUserSerializer,
     BlockedUserSerializer,
@@ -284,10 +292,13 @@ class ChatMessagesView(APIView):
     def get(self, request, chat_id):
         msgs = (
             Message.objects.filter(chat_id=chat_id)
+            .exclude(deleted_for__user=request.user)
             .select_related("sender")
             .order_by("created_at")
         )
-        return Response(MessageSerializer(msgs, many=True).data)
+        return Response(
+            MessageSerializer(msgs, many=True, context={"request": request}).data
+        )
 
     def post(self, request, chat_id):
         participant = ChatParticipant.objects.filter(
@@ -429,18 +440,32 @@ class BlockUserView(APIView):
         )
 
 
-class DeleteMessageView(APIView):
-    def delete(self, request, message_id):
-        msg = Message.objects.filter(id=message_id, sender=request.user).first()
+class MessageDeleteForMeView(APIView):
+    permission_classes = [IsChatParticipant]
 
+    def post(self, request, chat_id, msg_id):
+        msg = Message.objects.filter(id=msg_id, chat_id=chat_id).first()
         if not msg:
-            return Response(
-                {"detail": "Message not found or you are not the sender"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        msg.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        DeletedMessage.objects.get_or_create(message=msg, user=request.user)
+        return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class MessageDeleteForAllView(APIView):
+    permission_classes = [IsChatParticipant]
+
+    def post(self, request, chat_id, msg_id):
+        msg = Message.objects.filter(id=msg_id, chat_id=chat_id).first()
+        if not msg:
+            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # тільки відправник може видалити "для всіх"
+        if msg.sender_id != request.user.id:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        msg.delete()  # реальне видалення з БД
+        return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
 class CreateCallView(APIView):

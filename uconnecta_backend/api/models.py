@@ -1,7 +1,14 @@
 import os
 import uuid
+from django.conf import settings
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin, Group, Permission
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+    Group,
+    Permission,
+)
 from django.utils import timezone
 from django.db.models import JSONField
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -65,7 +72,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
 
     groups = models.ManyToManyField(Group, related_name="custom_user_set", blank=True)
-    user_permissions = models.ManyToManyField(Permission, related_name="custom_user_set", blank=True)
+    user_permissions = models.ManyToManyField(
+        Permission, related_name="custom_user_set", blank=True
+    )
 
     objects = UserManager()
 
@@ -77,7 +86,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, related_name="profile")
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, primary_key=True, related_name="profile"
+    )
     name = models.CharField(max_length=50, blank=True, null=True)
     surname = models.CharField(max_length=50, blank=True, null=True)
     patronymic = models.CharField(max_length=50, blank=True, null=True)
@@ -110,8 +121,12 @@ class Chat(models.Model):
 
 
 class ChatParticipant(models.Model):
-    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="participants")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="chat_participations")
+    chat = models.ForeignKey(
+        Chat, on_delete=models.CASCADE, related_name="participants"
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="chat_participations"
+    )
 
     deleted_at = models.DateTimeField(blank=True, null=True)
     auto_delete = models.BooleanField(default=False)
@@ -119,13 +134,17 @@ class ChatParticipant(models.Model):
     class Meta:
         unique_together = ("chat", "user")
 
+
 def chat_image_path(instance, filename):
     ext = filename.split(".")[-1]
     return os.path.join("chat_images", f"{uuid.uuid4()}.{ext}")
 
+
 class Message(models.Model):
     chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="messages")
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="messages_sent")
+    sender = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="messages_sent"
+    )
     body = models.TextField()
     created_at = models.DateTimeField(default=timezone.now)
     image = models.ImageField(upload_to=chat_image_path, blank=True, null=True)
@@ -136,8 +155,16 @@ class Message(models.Model):
 
 class Rate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    addressee = models.ForeignKey(User, on_delete=models.CASCADE, related_name="rates_received")
-    sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rates_given")
+    addressee = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="rates_received"
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rates_given",
+    )
     rate = models.DecimalField(
         max_digits=2,
         decimal_places=1,
@@ -158,7 +185,9 @@ class Rate(models.Model):
 
 class BlockedUser(models.Model):
     blocker = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blocking")
-    blocked = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blocked_by")
+    blocked = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="blocked_by"
+    )
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -176,8 +205,12 @@ class PasswordReset(models.Model):
 
 class Call(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name="calls_made")
-    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="calls_received")
+    caller = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="calls_made"
+    )
+    receiver = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="calls_received"
+    )
 
     started_at = models.DateTimeField(default=timezone.now)
     answered_at = models.DateTimeField(blank=True, null=True)
@@ -194,3 +227,17 @@ class Call(models.Model):
         ],
         default="ringing",
     )
+
+
+class DeletedMessage(models.Model):
+    message = models.ForeignKey(
+        "Message", on_delete=models.CASCADE, related_name="deleted_for"
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    deleted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("message", "user")
+        indexes = [
+            models.Index(fields=["user", "message"]),
+        ]

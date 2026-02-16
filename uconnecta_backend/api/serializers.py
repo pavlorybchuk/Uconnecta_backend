@@ -255,7 +255,7 @@ class ChatListSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source="sender.username", read_only=True)
-    image = serializers.ImageField(read_only=True, allow_null=True)
+    image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Message
@@ -268,7 +268,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "image",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at", "sender", "chat"]
+        read_only_fields = ["id", "created_at", "sender"]
 
 
 class CallSerializer(serializers.ModelSerializer):
