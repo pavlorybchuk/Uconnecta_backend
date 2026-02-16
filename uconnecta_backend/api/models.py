@@ -130,6 +130,7 @@ class ChatParticipant(models.Model):
 
     deleted_at = models.DateTimeField(blank=True, null=True)
     auto_delete = models.BooleanField(default=False)
+    auto_delete_enabled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ("chat", "user")

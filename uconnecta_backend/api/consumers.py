@@ -7,6 +7,16 @@ from .ws_auth import get_user_for_ws
 from .models import Call, BlockedUser, ChatParticipant, Message, Chat
 
 
+class PingConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+        await self.send(text_data=json.dumps({"type": "welcome"}))
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+
 @database_sync_to_async
 def is_blocked(a, b):
     return (
@@ -101,22 +111,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "message.created",
-            "payload": event["message"],
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "message.created",
+                    "payload": event["message"],
+                }
+            )
+        )
 
     async def chat_message_edited(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "message.edited",
-            "payload": event["message"],
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "message.edited",
+                    "payload": event["message"],
+                }
+            )
+        )
 
     async def chat_message_deleted(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "message.deleted",
-            "payload": {"id": event["message_id"]},
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "message.deleted",
+                    "payload": {"id": event["message_id"]},
+                }
+            )
+        )
 
     @database_sync_to_async
     def is_participant(self, chat_id, user):

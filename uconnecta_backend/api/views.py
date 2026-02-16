@@ -157,6 +157,9 @@ class ChatsListView(APIView):
             return Response([])
 
         auto_delete_by_chat = {cp.chat_id: cp.auto_delete for cp in my_cps}
+        auto_delete_enabled_at_by_chat = {
+            cp.chat_id: cp.auto_delete_enabled_at for cp in my_cps
+        }
 
         chats = Chat.objects.filter(
             participants__user=request.user,
@@ -191,6 +194,7 @@ class ChatsListView(APIView):
                 "request": request,
                 "auto_delete_by_chat": auto_delete_by_chat,
                 "other_user_by_chat": other_user_by_chat,
+                "auto_delete_enabled_at_by_chat": auto_delete_enabled_at_by_chat,
             },
         )
         return Response(serializer.data)
@@ -624,30 +628,25 @@ class SendEmailView(APIView):
 
 
 class ToggleAutoDeleteView(APIView):
-    """
-    POST /api/chats/<chat_id>/toggle-auto-delete/
-    Перемикає auto_delete для поточного користувача
-    """
 
     def post(self, request, chat_id):
-        cp = ChatParticipant.objects.filter(
-            chat_id=chat_id,
-            user=request.user,
-            deleted_at__isnull=True,
-        ).first()
-
+        cp = ChatParticipant.objects.filter(chat_id=chat_id, user=request.user).first()
         if not cp:
-            return Response({"detail": "Chat not found"}, status=404)
+            return Response({"detail": "Forbidden"}, status=403)
 
-        cp.auto_delete = not cp.auto_delete
-        cp.save(update_fields=["auto_delete"])
+        if cp.auto_delete:
+            cp.auto_delete = False
+            cp.auto_delete_enabled_at = None
+        else:
+            cp.auto_delete = True
+            cp.auto_delete_enabled_at = timezone.now()
 
+        cp.save(update_fields=["auto_delete", "auto_delete_enabled_at"])
         return Response(
             {
-                "chat_id": str(chat_id),
                 "auto_delete": cp.auto_delete,
-            },
-            status=200,
+                "auto_delete_enabled_at": cp.auto_delete_enabled_at,
+            }
         )
 
 

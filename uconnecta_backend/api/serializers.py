@@ -227,6 +227,7 @@ class MeUpdateSerializer(serializers.Serializer):
 class ChatListSerializer(serializers.ModelSerializer):
     auto_delete = serializers.SerializerMethodField()
     other_user = serializers.SerializerMethodField()
+    auto_delete_enabled_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -237,6 +238,7 @@ class ChatListSerializer(serializers.ModelSerializer):
             "last_message_at",
             "auto_delete",
             "other_user",
+            "auto_delete_enabled_at",
         ]
 
     def get_auto_delete(self, chat: Chat):
@@ -251,6 +253,11 @@ class ChatListSerializer(serializers.ModelSerializer):
 
         request = self.context.get("request")
         return UserPublicSerializer(other, context={"request": request}).data
+
+    def get_auto_delete_enabled_at(self, chat: Chat):
+        m = self.context.get("auto_delete_enabled_at_by_chat") or {}
+        dt = m.get(chat.id)
+        return dt.isoformat()
 
 
 class MessageSerializer(serializers.ModelSerializer):
