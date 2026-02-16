@@ -257,7 +257,7 @@ class ChatListSerializer(serializers.ModelSerializer):
     def get_auto_delete_enabled_at(self, chat: Chat):
         m = self.context.get("auto_delete_enabled_at_by_chat") or {}
         dt = m.get(chat.id)
-        return dt.isoformat()
+        return dt
 
 
 class MessageSerializer(serializers.ModelSerializer):
