@@ -50,13 +50,12 @@ SIMPLE_JWT = {
     ),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
-
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-
+os.makedirs(str(MEDIA_ROOT), exist_ok=True)
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Kyiv")
