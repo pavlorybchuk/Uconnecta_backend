@@ -351,6 +351,12 @@ class ChatMessagesView(APIView):
                 {"detail": "You cannot send messages to this user"}, status=403
             )
 
+        restored_for_other = False
+        if other.deleted_at is not None:
+            other.deleted_at = None
+            other.save(update_fields=["deleted_at"])
+            restored_for_other = True
+
         body = (request.data.get("body") or "").strip()
         image = request.FILES.get("image")
 
@@ -373,10 +379,33 @@ class ChatMessagesView(APIView):
             f"chat_{chat_id}",
             {
                 "type": "chat.message",
-                "message": MessageSerializer(msg).data,
+                "message": MessageSerializer(msg, context={"request": request}).data,
             },
         )
-
+        if restored_for_other:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{other.user_id}",
+                {
+                    "type": "notify",
+                    "payload": {
+                        "type": "chat.restored",
+                        "chat_id": str(chat_id),
+                    },
+                },
+            )
+        async_to_sync(channel_layer.group_send)(
+            f"user_{other.user_id}",
+            {
+                "type": "notify",
+                "payload": {
+                    "type": "message.created",
+                    "chat_id": str(chat_id),
+                    "message": MessageSerializer(
+                        msg, context={"request": request}
+                    ).data,
+                },
+            },
+        )
         return Response(
             MessageSerializer(msg, context={"request": request}).data, status=201
         )

@@ -18,6 +18,7 @@ ALLOWED_HOSTS = (
 
 INSTALLED_APPS = [
     "daphne",
+    "cloudinary_storage",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -26,9 +27,28 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
+    "cloudinary",
     "api",
     "channels",
 ]
+
+
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.getenv("CLOUD_NAME"),
+    "API_KEY": os.getenv("CLOUD_API_KEY"),
+    "API_SECRET": os.getenv("CLOUD_API_KEY_SECRET"),
+}
+
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        # Або стандартний, якщо не використовуєте WhiteNoise:
+        # "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 AUTH_USER_MODEL = "api.User"
 

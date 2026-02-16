@@ -30,6 +30,36 @@ def get_call(call_id):
     return Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
 
 
+class UserConsumer(AsyncWebsocketConsumer):
+    """
+    WS канал користувача (завжди активний), щоб слати:
+    - chat.restored
+    - message.created (для оновлення списку чатів/бейджів)
+    навіть якщо користувач "delete-for-me" і не може підключитися до chat_<id>.
+    """
+
+    async def connect(self):
+        self.user = await get_user_for_ws(self.scope)
+
+        if not self.user.is_authenticated:
+            await self.close(code=4401)
+            return
+
+        self.group_name = f"user_{self.user.id}"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def notify(self, event):
+        """
+        Очікуємо event = {"type": "notify", "payload": {...}}
+        """
+        await self.send(text_data=json.dumps(event["payload"]))
+
+
 class CallSignalingConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.call_id = self.scope["url_route"]["kwargs"]["call_id"]

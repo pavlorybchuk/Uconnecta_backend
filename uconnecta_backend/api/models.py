@@ -146,7 +146,7 @@ class Message(models.Model):
     sender = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="messages_sent"
     )
-    body = models.TextField()
+    body = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     image = models.ImageField(upload_to=chat_image_path, blank=True, null=True)
 
@@ -217,16 +217,18 @@ class Call(models.Model):
     answered_at = models.DateTimeField(blank=True, null=True)
     ended_at = models.DateTimeField(blank=True, null=True)
 
+    call_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class Status(models.TextChoices):
+        INITIATED = "initiated"
+        ACCEPTED = "accepted"
+        DECLINED = "declined"
+        ENDED = "ended"
+
     status = models.CharField(
         max_length=20,
-        choices=[
-            ("ringing", "Ringing"),
-            ("in_progress", "In Progress"),
-            ("rejected", "Rejected"),
-            ("ended", "Ended"),
-            ("missed", "Missed"),
-        ],
-        default="ringing",
+        choices=Status.choices,
+        default=Status.INITIATED,
     )
 
 
