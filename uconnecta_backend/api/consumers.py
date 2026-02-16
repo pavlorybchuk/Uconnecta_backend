@@ -7,16 +7,6 @@ from .ws_auth import get_user_for_ws
 from .models import Call, BlockedUser, ChatParticipant, Message, Chat
 
 
-class PingConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        await self.accept()
-        await self.send(text_data=json.dumps({"type": "welcome"}))
-
-    async def disconnect(self, close_code):
-        if hasattr(self, "group_name"):
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
-
-
 @database_sync_to_async
 def is_blocked(a, b):
     return (
@@ -110,29 +100,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        body = data.get("body", "").strip()
-        if not body:
-            return
-
-        msg = await self.create_message(self.chat_id, self.user, body)
-
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type": "chat.message",
-                "message": {
-                    "id": msg.id,
-                    "body": msg.body,
-                    "sender_id": str(self.user.id),
-                    "created_at": msg.created_at.isoformat(),
-                },
-            },
-        )
-
     async def chat_message(self, event):
-        await self.send(text_data=json.dumps(event["message"]))
+        await self.send(text_data=json.dumps({
+            "type": "message.created",
+            "payload": event["message"],
+        }))
+
+    async def chat_message_edited(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message.edited",
+            "payload": event["message"],
+        }))
+
+    async def chat_message_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message.deleted",
+            "payload": {"id": event["message_id"]},
+        }))
 
     @database_sync_to_async
     def is_participant(self, chat_id, user):

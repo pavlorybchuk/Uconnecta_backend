@@ -465,6 +465,11 @@ class MessageDeleteForAllView(APIView):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         msg.delete()  # реальне видалення з БД
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {"type": "chat.message_deleted", "message_id": msg_id},
+        )
         return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
@@ -643,4 +648,42 @@ class ToggleAutoDeleteView(APIView):
                 "auto_delete": cp.auto_delete,
             },
             status=200,
+        )
+
+
+class MessageEditView(APIView):
+    permission_classes = [IsChatParticipant]
+
+    def patch(self, request, chat_id, msg_id):
+        msg = Message.objects.filter(id=msg_id, chat_id=chat_id).first()
+        if not msg:
+            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # лише автор
+        if msg.sender_id != request.user.id:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        body = (request.data.get("body") or "").strip()
+
+        # якщо у повідомленні немає картинки — не дозволяємо зробити його повністю пустим
+        if not body and not msg.image:
+            return Response(
+                {"detail": "body required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        msg.body = body if body else None
+        msg.save(update_fields=["body"])
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{chat_id}",
+            {
+                "type": "chat.message_edited",
+                "message": MessageSerializer(msg, context={"request": request}).data,
+            },
+        )
+
+        # якщо хочеш синхронізацію через WS — можна додати group_send тут
+        return Response(
+            MessageSerializer(msg, context={"request": request}).data,
+            status=status.HTTP_200_OK,
         )

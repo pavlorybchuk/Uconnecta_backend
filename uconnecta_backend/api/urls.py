@@ -11,6 +11,7 @@ from .views import (
     IceServersView,
     MessageDeleteForAllView,
     MessageDeleteForMeView,
+    MessageEditView,
     RegisterView,
     RejectCallView,
     SearchUserView,
@@ -75,5 +76,9 @@ urlpatterns = [
     path(
         "chats/<uuid:chat_id>/toggle-auto-delete/",
         ToggleAutoDeleteView.as_view(),
+    ),
+    path(
+        "chats/<uuid:chat_id>/messages/<int:msg_id>/",
+        MessageEditView.as_view(),
     ),
 ]
