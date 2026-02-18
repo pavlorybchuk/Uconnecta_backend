@@ -1,4 +1,6 @@
 import os
+import uuid
+from firebase_admin import messaging
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.utils import timezone
@@ -13,7 +15,8 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.db.models import Avg
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework import serializers
+
+from .fcm import send_push_to_token
 from .models import (
     BlockedUser,
     Car,
@@ -250,6 +253,22 @@ class CreateDirectChatView(APIView):
                 ),
             )
 
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            f"user_{request.user.id}",
+            {
+                "type": "notify",
+                "payload": {"type": "chat.created", "chat_id": str(chat.id)},
+            },
+        )
+        async_to_sync(channel_layer.group_send)(
+            f"user_{other.id}",
+            {
+                "type": "notify",
+                "payload": {"type": "chat.created", "chat_id": str(chat.id)},
+            },
+        )
         return Response({"chat_id": str(chat.id)}, status=201)
 
 
@@ -266,15 +285,12 @@ class DeleteChatForMeView(APIView):
         cp.save(update_fields=["deleted_at"])
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
+            f"user_{request.user.id}",
             {
-                "type": "chat.event",
+                "type": "notify",
                 "payload": {
                     "type": "chat.deleted_for_me",
-                    "payload": {
-                        "chat_id": str(chat_id),
-                        "user_id": str(request.user.id),
-                    },
+                    "chat_id": str(chat_id),
                 },
             },
         )
@@ -289,20 +305,60 @@ class DeleteChatForAllView(APIView):
         if not is_participant:
             return Response({"detail": "Forbidden"}, status=403)
 
+        other_cp = (
+            ChatParticipant.objects.filter(chat_id=chat_id)
+            .exclude(user=request.user)
+            .first()
+        )
+        other_user_id = other_cp.user_id if other_cp else None
+
         channel_layer = get_channel_layer()
+
         async_to_sync(channel_layer.group_send)(
-            f"chat_{chat_id}",
+            f"user_{request.user.id}",
             {
-                "type": "chat.event",
-                "payload": {
-                    "type": "chat.deleted_for_all",
-                    "payload": {"chat_id": str(chat_id)},
-                },
+                "type": "notify",
+                "payload": {"type": "chat.deleted_for_all", "chat_id": str(chat_id)},
             },
         )
 
+        if other_user_id:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{other_user_id}",
+                {
+                    "type": "notify",
+                    "payload": {
+                        "type": "chat.deleted_for_all",
+                        "chat_id": str(chat_id),
+                    },
+                },
+            )
+
         Chat.objects.filter(id=chat_id).delete()
         return Response({"detail": "deleted_for_all"})
+
+
+class SaveFcmTokenView(APIView):
+    def post(self, request):
+        token = request.data.get("fcm_token")
+
+        if not token:
+            return Response({"detail": "fcm_token is required"}, status=400)
+
+        request.user.fcm_token = token
+        request.user.save(update_fields=["fcm_token"])
+
+        return Response({"ok": True})
+
+
+def _ws_safe(obj):
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _ws_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_ws_safe(x) for x in obj]
+    return obj
 
 
 class ChatMessagesView(APIView):
@@ -375,16 +431,18 @@ class ChatMessagesView(APIView):
         msg.chat.save(update_fields=["last_message_at"])
 
         channel_layer = get_channel_layer()
+        payload_msg = MessageSerializer(msg, context={"request": request}).data
+
         async_to_sync(channel_layer.group_send)(
             f"chat_{chat_id}",
             {
                 "type": "chat.message",
-                "message": MessageSerializer(msg, context={"request": request}).data,
+                "message": _ws_safe(payload_msg),
             },
         )
         if restored_for_other:
             async_to_sync(channel_layer.group_send)(
-                f"user_{other.user_id}",
+                f"user_{other.user.id}",
                 {
                     "type": "notify",
                     "payload": {
@@ -394,18 +452,35 @@ class ChatMessagesView(APIView):
                 },
             )
         async_to_sync(channel_layer.group_send)(
-            f"user_{other.user_id}",
+            f"user_{other.user.id}",
             {
                 "type": "notify",
                 "payload": {
                     "type": "message.created",
                     "chat_id": str(chat_id),
-                    "message": MessageSerializer(
-                        msg, context={"request": request}
-                    ).data,
+                    "message": _ws_safe(payload_msg),
                 },
             },
         )
+
+        receiver_token = other.user.fcm_token
+        if receiver_token:
+            try:
+                sender_data = UserPublicSerializer(
+                    request.user,
+                    context={"request": request},
+                ).data
+
+                sender_name = sender_data.get("display_name") or request.user.username
+
+                send_push_to_token(
+                    token=receiver_token,
+                    title=sender_name,
+                    body=msg.body or "🖼️ Picture",
+                    data={"chat_id": str(chat_id), "type": "message.created"},
+                )
+            except Exception:
+                pass
         return Response(
             MessageSerializer(msg, context={"request": request}).data, status=201
         )

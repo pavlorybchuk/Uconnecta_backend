@@ -27,6 +27,7 @@ from .views import (
     SendEmailView,
     LogoutView,
     ToggleAutoDeleteView,
+    SaveFcmTokenView,
 )
 
 urlpatterns = [
@@ -81,4 +82,5 @@ urlpatterns = [
         "chats/<uuid:chat_id>/messages/<int:msg_id>/",
         MessageEditView.as_view(),
     ),
+    path("me/fcm/", SaveFcmTokenView.as_view(), name="save_fcm_token"),
 ]

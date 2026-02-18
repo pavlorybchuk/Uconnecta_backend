@@ -75,7 +75,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     user_permissions = models.ManyToManyField(
         Permission, related_name="custom_user_set", blank=True
     )
-
+    fcm_token = models.CharField(max_length=255, null=True, blank=True)
     objects = UserManager()
 
     USERNAME_FIELD = "email"
