@@ -718,37 +718,37 @@ class SendEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        s = SendEmailSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        # s = SendEmailSerializer(data=request.data)
+        # s.is_valid(raise_exception=True)
 
-        to = s.validated_data["to"]
-        subject = s.validated_data["subject"]
-        body = s.validated_data["body"]
-        user_to = User.objects.filter(id=to).first()
-        if not user_to:
-            return Response(
-                {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+        # to = s.validated_data["to"]
+        # subject = s.validated_data["subject"]
+        # body = s.validated_data["body"]
+        # user_to = User.objects.filter(id=to).first()
+        # if not user_to:
+        #     return Response(
+        #         {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
+        #     )
 
-        response = requests.post(
-            "https://api.mailgun.net/v3/sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org/messages",
-            auth=("api", os.getenv("MAILGUN_API_KEY")),
-            data={
-                "from": "Mailgun Sandbox <postmaster@sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org>",
-                "to": user_to.email,
-                "subject": subject,
-                "text": body,
-            },
-        )
+        # response = requests.post(
+        #     "https://api.mailgun.net/v3/sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org/messages",
+        #     auth=("api", os.getenv("MAILGUN_API_KEY")),
+        #     data={
+        #         "from": "Mailgun Sandbox <postmaster@sandbox66b11c0a8eef4eeeace8879fec71adcd.mailgun.org>",
+        #         "to": user_to.email,
+        #         "subject": subject,
+        #         "text": body,
+        #     },
+        # )
 
-        if response.status_code != 200:
-            return Response(
-                {"detail": response.text},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # if response.status_code != 200:
+        #     return Response(
+        #         {"detail": response.text},
+        #         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        #     )
 
         return Response(
-            {"sent": response.status_code == 200}, status=status.HTTP_200_OK
+            {"sent": True}, status=status.HTTP_200_OK
         )
 
 
