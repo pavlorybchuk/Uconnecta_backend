@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-
+from .recognize_view import RecognizePhotoView
 from .views import (
     AcceptCallView,
     AddCarView,
@@ -83,4 +83,5 @@ urlpatterns = [
         MessageEditView.as_view(),
     ),
     path("me/fcm/", SaveFcmTokenView.as_view(), name="save_fcm_token"),
+    path("recognize-photo/", RecognizePhotoView.as_view(), name="recognize_photo"),
 ]
