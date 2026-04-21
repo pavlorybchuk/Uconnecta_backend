@@ -602,9 +602,25 @@ class MessageDeleteForAllView(APIView):
         return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
+def _notify_user(user_id, payload: dict):
+    """Send a notify event to a user's personal WS channel."""
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"user_{user_id}",
+        {"type": "notify", "payload": payload},
+    )
+
+
 class CreateCallView(APIView):
+    """
+    POST /api/calls/create/
+    Body: { receiver_id, chat_id (optional) }
+    Also aliased at /api/calls/start/ for backward compatibility.
+    """
     def post(self, request):
-        receiver_id = request.data.get("receiver_id")
+        receiver_id = request.data.get("receiver_id") or request.data.get("callee_id")
+        chat_id = request.data.get("chat_id")
+
         if not receiver_id:
             return Response({"detail": "receiver_id required"}, status=400)
 
@@ -622,8 +638,47 @@ class CreateCallView(APIView):
             return Response({"detail": "Blocked"}, status=403)
 
         call = Call.objects.create(
-            caller=request.user, receiver=receiver, status="ringing"
+            caller=request.user,
+            receiver=receiver,
+            status=Call.Status.INITIATED,
         )
+
+        from_user_data = UserPublicSerializer(
+            request.user, context={"request": request}
+        ).data
+
+        # Notify receiver via their personal WS channel
+        _notify_user(
+            receiver.id,
+            {
+                "type": "call.incoming",
+                "call_id": str(call.id),
+                "chat_id": str(chat_id) if chat_id else None,
+                "from_user": from_user_data,
+            },
+        )
+
+        # FCM push so the receiver gets notified even if the app is backgrounded
+        receiver_token = receiver.fcm_token
+        if receiver_token:
+            import json as _json
+            try:
+                send_push_to_token(
+                    token=receiver_token,
+                    title="Incoming call",
+                    body=f"{request.user.username} is calling you",
+                    data={
+                        "type": "call.incoming",
+                        "call_id": str(call.id),
+                        "chat_id": str(chat_id) if chat_id else "",
+                        "from_user": _json.dumps(
+                            {k: str(v) for k, v in from_user_data.items() if v is not None}
+                        ),
+                    },
+                )
+            except Exception:
+                pass
+
         return Response({"call_id": str(call.id), "status": call.status}, status=201)
 
 
@@ -636,12 +691,19 @@ class AcceptCallView(APIView):
             return Response({"detail": "Not found"}, status=404)
         if call.receiver != request.user:
             return Response({"detail": "Forbidden"}, status=403)
-        if call.status != "ringing":
+        if call.status != Call.Status.INITIATED:
             return Response({"detail": "Invalid state"}, status=400)
 
-        call.status = "in_progress"
-        call.answered_at = timezone.now() if hasattr(call, "answered_at") else None
-        call.save()
+        call.status = Call.Status.ACCEPTED
+        call.answered_at = timezone.now()
+        call.save(update_fields=["status", "answered_at"])
+
+        # Tell the caller their call was accepted so they can start WebRTC
+        _notify_user(
+            call.caller.id,
+            {"type": "call.accepted", "call_id": str(call.id)},
+        )
+
         return Response({"status": call.status})
 
 
@@ -654,12 +716,19 @@ class RejectCallView(APIView):
             return Response({"detail": "Not found"}, status=404)
         if call.receiver != request.user:
             return Response({"detail": "Forbidden"}, status=403)
-        if call.status != "ringing":
+        if call.status != Call.Status.INITIATED:
             return Response({"detail": "Invalid state"}, status=400)
 
-        call.status = "rejected"
+        call.status = Call.Status.DECLINED
         call.ended_at = timezone.now()
         call.save(update_fields=["status", "ended_at"])
+
+        # Tell the caller their call was rejected
+        _notify_user(
+            call.caller.id,
+            {"type": "call.rejected", "call_id": str(call.id)},
+        )
+
         return Response({"status": call.status})
 
 
@@ -673,10 +742,42 @@ class EndCallView(APIView):
         if request.user not in (call.caller, call.receiver):
             return Response({"detail": "Forbidden"}, status=403)
 
-        call.status = "ended"
+        call.status = Call.Status.ENDED
         call.ended_at = timezone.now()
         call.save(update_fields=["status", "ended_at"])
+
+        # Notify the OTHER party that the call ended
+        other = call.receiver if request.user == call.caller else call.caller
+        _notify_user(
+            other.id,
+            {"type": "call.ended", "call_id": str(call.id)},
+        )
+
         return Response({"status": call.status})
+
+
+class MissedCallView(APIView):
+    """Called by the receiver's client when the incoming call times out locally."""
+    def post(self, request, call_id):
+        call = (
+            Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
+        )
+        if not call:
+            return Response({"detail": "Not found"}, status=404)
+        if call.receiver != request.user:
+            return Response({"detail": "Forbidden"}, status=403)
+
+        call.status = Call.Status.ENDED
+        call.ended_at = timezone.now()
+        call.save(update_fields=["status", "ended_at"])
+
+        # Notify caller so their ringing UI dismisses
+        _notify_user(
+            call.caller.id,
+            {"type": "call.ended", "call_id": str(call.id)},
+        )
+
+        return Response({"ok": True})
 
 
 class CallHistoryView(APIView):
@@ -699,14 +800,48 @@ class CallHistoryView(APIView):
 
 
 class IceServersView(APIView):
+    """
+    Returns ICE server configuration for WebRTC.
+
+    For production, set TURN_USERNAME and TURN_CREDENTIAL in env vars and
+    provision a dedicated TURN server (coturn / Metered / Twilio).
+
+    The open-relay entries below are free public TURN servers suitable for
+    development / low-traffic use.
+    """
+
     def get(self, request):
-        return Response(
-            {
-                "iceServers": [
-                    {"urls": ["stun:stun.l.google.com:19302"]},
-                ]
-            }
-        )
+        import os
+
+        turn_username   = os.getenv("TURN_USERNAME",   "openrelayproject")
+        turn_credential = os.getenv("TURN_CREDENTIAL", "openrelayproject")
+        turn_host       = os.getenv("TURN_HOST",       "openrelay.metered.ca")
+
+        return Response({
+            "iceServers": [
+                # STUN — fast, for same-network or easy NAT traversal
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                # TURN UDP — used when direct connection fails
+                {
+                    "urls": [f"turn:{turn_host}:80"],
+                    "username":   turn_username,
+                    "credential": turn_credential,
+                },
+                # TURN TCP — fallback when UDP is blocked
+                {
+                    "urls": [f"turn:{turn_host}:443"],
+                    "username":   turn_username,
+                    "credential": turn_credential,
+                },
+                # TURN TLS over TCP — last resort through strict firewalls
+                {
+                    "urls": [f"turns:{turn_host}:443?transport=tcp"],
+                    "username":   turn_username,
+                    "credential": turn_credential,
+                },
+            ]
+        })
 
 
 class SendEmailView(APIView):

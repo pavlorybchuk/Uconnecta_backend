@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .recognize_view import RecognizePhotoView
 from .views import (
     AcceptCallView,
+    MissedCallView,
     AddCarView,
     BlockUserView,
     CreateCallView,
@@ -69,9 +70,11 @@ urlpatterns = [
     path("blocked/<uuid:user_id>/", UnblockUserView.as_view(), name="unblock_user"),
     path("block/", BlockUserView.as_view(), name="block_user"),
     path("calls/create/", CreateCallView.as_view()),
+    path("calls/start/", CreateCallView.as_view()),  # backward-compat alias
     path("calls/<uuid:call_id>/accept/", AcceptCallView.as_view()),
     path("calls/<uuid:call_id>/reject/", RejectCallView.as_view()),
     path("calls/<uuid:call_id>/end/", EndCallView.as_view()),
+    path("calls/<uuid:call_id>/missed/", MissedCallView.as_view()),
     path("webrtc/ice-servers/", IceServersView.as_view()),
     path("email/send/", SendEmailView.as_view(), name="email-send"),
     path(

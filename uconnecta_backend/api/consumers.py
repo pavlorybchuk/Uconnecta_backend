@@ -102,7 +102,7 @@ class CallSignalingConsumer(AsyncWebsocketConsumer):
             )
             return
 
-        if payload.get("type") not in ("offer", "answer", "ice", "hangup"):
+        if payload.get("type") not in ("offer", "answer", "ice", "hangup", "ready"):
             await self.send(
                 text_data=json.dumps({"type": "error", "detail": "Invalid type"})
             )
@@ -115,6 +115,9 @@ class CallSignalingConsumer(AsyncWebsocketConsumer):
         )
 
     async def relay(self, event):
+        # Never echo a message back to the sender
+        if event["payload"].get("sender_id") == str(self.user.id):
+            return
         await self.send(text_data=json.dumps(event["payload"]))
 
 
