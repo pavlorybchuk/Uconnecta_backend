@@ -1,6 +1,8 @@
 import os
 import json
 import firebase_admin
+import logging
+logger = logging.getLogger(__name__)
 from firebase_admin import credentials, messaging
 
 
@@ -39,5 +41,5 @@ def send_push_to_token(*, token: str, title: str, body: str, data: dict | None =
         ),
     )
 
-    messaging.send(msg)
-    return True
+    response = messaging.send(msg)
+    return response
