@@ -4,5 +4,8 @@ from .models import User, Profile
 
 @receiver(post_save, sender=User)
 def create_profile(sender, instance: User, created, **kwargs):
+    """
+    Automaticly create a Profile object when the User object is created.
+    """
     if created:
         Profile.objects.create(user=instance)

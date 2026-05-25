@@ -48,6 +48,9 @@ User = get_user_model()
 
 
 def generate_username():
+    """
+    Generates a random 8-character alphanumeric username.
+    """
     chars = list(string.ascii_letters + string.digits)
     res = ""
     for _ in range(8):
@@ -56,7 +59,13 @@ def generate_username():
 
 
 class LogoutView(APIView):
+    """
+    API View to handle user logout by blacklisting the provided refresh token.
+    """
     def post(self, request):
+        """
+        Handles POST request to log out a user and blacklist their refresh token.
+        """
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -64,9 +73,15 @@ class LogoutView(APIView):
 
 
 class RegisterView(APIView):
+    """
+    API View to handle new user registration with an auto-generated random username.
+    """
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """
+        Handles POST request for user registration. Generates a unique username and creates a user.
+        """
         data = request.data.copy()
         while True:
             data["username"] = generate_username()
@@ -82,9 +97,15 @@ class RegisterView(APIView):
 
 
 class SearchUserView(APIView):
+    """
+    API View to search for a user based on car number or username.
+    """
     permission_classes = [AllowAny]
 
     def get(self, request):
+        """
+        Handles GET request to search for a user using 'car_number' or 'username' query parameters.
+        """
         car_number = request.query_params.get("car_number")
         username = request.query_params.get("username")
 
@@ -108,7 +129,13 @@ class SearchUserView(APIView):
 
 
 class MeView(APIView):
+    """
+    API View to retrieve or partially update the authenticated user's own profile data.
+    """
     def get(self, request):
+        """
+        Handles GET request to retrieve the current user's profile, cars, and rating.
+        """
         user = (
             User.objects.select_related("profile")
             .prefetch_related("cars")
@@ -118,6 +145,9 @@ class MeView(APIView):
         return Response(MeSerializer(user).data)
 
     def patch(self, request):
+        """
+        Handles PATCH request to partially update the current user's details and settings.
+        """
         s = MeUpdateSerializer(
             instance=request.user,
             data=request.data,
@@ -139,12 +169,14 @@ class MeView(APIView):
 
 class ChatsListView(APIView):
     """
-    /api/chats?sort=last_message|created_at
-    Повертає тільки ті чати, де користувач не видалив чат (deleted_at is null)
-    + додає other_user та auto_delete для UI
+    API View to retrieve a sorted list of active chats for the current user.
+    Only returns chats where the user has not deleted the chat (deleted_at is null).
     """
 
     def get(self, request):
+        """
+        Handles GET request to retrieve user chats, sorted by last message or creation date.
+        """
         sort = request.query_params.get("sort", "last_message")
         ordering = "-last_message_at" if sort == "last_message" else "-created_at"
 
@@ -203,6 +235,9 @@ class ChatsListView(APIView):
 
 
 def is_blocked(a, b):
+    """
+    Helper function to check if a block relationship exists between user 'a' and user 'b'.
+    """
     return (
         BlockedUser.objects.filter(blocker=a, blocked=b).exists()
         or BlockedUser.objects.filter(blocker=b, blocked=a).exists()
@@ -211,12 +246,14 @@ def is_blocked(a, b):
 
 class CreateDirectChatView(APIView):
     """
-    POST /api/chats/direct { "other_user_id": "uuid" }
-    Створює direct чат між двома людьми (без дублювань).
+    API View to create a direct chat between two specific users without duplications.
     """
 
     @transaction.atomic
     def post(self, request):
+        """
+        Handles POST request to create or fetch a direct chat with another user using 'other_user_id'.
+        """
         other_id = request.data.get("other_user_id")
         if not other_id:
             return Response({"detail": "other_user_id required"}, status=400)
@@ -273,10 +310,13 @@ class CreateDirectChatView(APIView):
 
 class DeleteChatForMeView(APIView):
     """
-    POST /api/chats/<chat_id>/delete-for-me
+    API View to hide/delete a chat for the current user only (soft delete via deleted_at timestamp).
     """
 
     def post(self, request, chat_id):
+        """
+        Handles POST request to set 'deleted_at' for the current user's participant record in a specific chat.
+        """
         cp = ChatParticipant.objects.filter(chat_id=chat_id, user=request.user).first()
         if not cp:
             return Response({"detail": "Not found"}, status=404)
@@ -297,7 +337,13 @@ class DeleteChatForMeView(APIView):
 
 
 class DeleteChatForAllView(APIView):
+    """
+    API View to permanently delete a chat and all its associated records for all participants.
+    """
     def post(self, request, chat_id):
+        """
+        Handles POST request to delete a chat globally from the database and notify both participants.
+        """
         is_participant = ChatParticipant.objects.filter(
             chat_id=chat_id, user=request.user
         ).exists()
@@ -338,7 +384,13 @@ class DeleteChatForAllView(APIView):
 
 
 class SaveFcmTokenView(APIView):
+    """
+    API View to save or update the user's Firebase Cloud Messaging (FCM) token for push notifications.
+    """
     def post(self, request):
+        """
+        Handles POST request to link a new 'fcm_token' with the authenticated user profile.
+        """
         token = request.data.get("fcm_token")
 
         if not token:
@@ -351,6 +403,9 @@ class SaveFcmTokenView(APIView):
 
 
 def _ws_safe(obj):
+    """
+    Helper function to recursively convert UUID objects into strings to ensure safe WebSocket payloads.
+    """
     if isinstance(obj, uuid.UUID):
         return str(obj)
     if isinstance(obj, dict):
@@ -362,14 +417,15 @@ def _ws_safe(obj):
 
 class ChatMessagesView(APIView):
     """
-    GET /api/chats/<chat_id>/messages
-    Повертає всі повідомлення чату (тільки для учасника, який не delete-for-me).
+    API View to fetch all messages or send a new message (text or image) inside a specific chat.
     """
-
     permission_classes = [IsChatParticipant]
     parser_classes = [MultiPartParser, FormParser]
 
     def get(self, request, chat_id):
+        """
+        Handles GET request to fetch messages from a specific chat, excluding messages deleted by the user.
+        """
         msgs = (
             Message.objects.filter(chat_id=chat_id)
             .exclude(deleted_for__user=request.user)
@@ -381,6 +437,9 @@ class ChatMessagesView(APIView):
         )
 
     def post(self, request, chat_id):
+        """
+        Handles POST request to send a new message, restore chat visibility if hidden, and trigger push notifications.
+        """
         participant = ChatParticipant.objects.filter(
             chat=chat_id, user=request.user
         ).first()
@@ -487,10 +546,13 @@ class ChatMessagesView(APIView):
 
 class CallsHistoryView(APIView):
     """
-    GET /api/calls/history
+    API View to retrieve the calling history for the authenticated user (both inbound and outbound calls).
     """
 
     def get(self, request):
+        """
+        Handles GET request to fetch call logs ordered chronologically by starting time.
+        """
         qs = Call.objects.filter(
             Q(caller=request.user) | Q(receiver=request.user)
         ).order_by("-started_at")
@@ -498,7 +560,13 @@ class CallsHistoryView(APIView):
 
 
 class BlockedUsersListView(APIView):
+    """
+    API View to list all users currently blocked by the authenticated user.
+    """
     def get(self, request):
+        """
+        Handles GET request to fetch the list of blocked users including their public profile statistics.
+        """
         qs = (
             BlockedUser.objects.filter(blocker=request.user)
             .select_related("blocked", "blocked__profile")
@@ -514,7 +582,13 @@ class BlockedUsersListView(APIView):
 
 
 class AddCarView(APIView):
+    """
+    API View to register a new car plate number for the authenticated user.
+    """
     def post(self, request):
+        """
+        Handles POST request to validate and attach a unique car plate to the current user.
+        """
         serializer = CarCreateSerializer(
             data=request.data, context={"request": request}
         )
@@ -524,7 +598,13 @@ class AddCarView(APIView):
 
 
 class DeleteCarView(APIView):
+    """
+    API View to remove a registered car plate number owned by the current user.
+    """
     def delete(self, request, car_number: str):
+        """
+        Handles DELETE request to look up and remove a specific car number belonging to the user.
+        """
         car_number = car_number.upper().strip()
 
         car = Car.objects.filter(car_number=car_number, user=request.user).first()
@@ -540,7 +620,13 @@ class DeleteCarView(APIView):
 
 
 class UnblockUserView(APIView):
+    """
+    API View to unblock a previously blocked user.
+    """
     def delete(self, request, user_id):
+        """
+        Handles DELETE request to remove a user block record mapping from the current user.
+        """
         deleted, _ = BlockedUser.objects.filter(
             blocker=request.user, blocked_id=user_id
         ).delete()
@@ -554,7 +640,13 @@ class UnblockUserView(APIView):
 
 
 class BlockUserView(APIView):
+    """
+    API View to block another user, preventing messaging and calling interactions.
+    """
     def post(self, request):
+        """
+        Handles POST request to create a block relationship between the current user and target user.
+        """
         s = BlockUserSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
         obj = s.save()
@@ -569,9 +661,15 @@ class BlockUserView(APIView):
 
 
 class MessageDeleteForMeView(APIView):
+    """
+    API View to hide a specific message within a chat for the current user only.
+    """
     permission_classes = [IsChatParticipant]
 
     def post(self, request, chat_id, msg_id):
+        """
+        Handles POST request to mark a message as deleted locally for the current user.
+        """
         msg = Message.objects.filter(id=msg_id, chat_id=chat_id).first()
         if not msg:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -581,9 +679,15 @@ class MessageDeleteForMeView(APIView):
 
 
 class MessageDeleteForAllView(APIView):
+    """
+    API View to permanently delete a message for all chat participants.
+    """
     permission_classes = [IsChatParticipant]
 
     def post(self, request, chat_id, msg_id):
+        """
+        Handles POST request to hard delete a message if the current user is the original sender.
+        """
         msg = Message.objects.filter(id=msg_id, chat_id=chat_id).first()
         if not msg:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -602,7 +706,9 @@ class MessageDeleteForAllView(APIView):
 
 
 def _notify_user(user_id, payload: dict):
-    """Send a notify event to a user's personal WS channel."""
+    """
+    Send a notify event to a user's personal WebSocket channel.
+    """
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
         f"user_{user_id}",
@@ -612,11 +718,12 @@ def _notify_user(user_id, payload: dict):
 
 class CreateCallView(APIView):
     """
-    POST /api/calls/create/
-    Body: { receiver_id, chat_id (optional) }
-    Also aliased at /api/calls/start/ for backward compatibility.
+    API View to initiate a new WebRTC call, dispatching WebSocket events and FCM push alerts to the receiver.
     """
     def post(self, request):
+        """
+        Handles POST request to start a call and check permissions/blocks before connecting.
+        """
         receiver_id = request.data.get("receiver_id") or request.data.get("callee_id")
         chat_id = request.data.get("chat_id")
 
@@ -682,7 +789,13 @@ class CreateCallView(APIView):
 
 
 class AcceptCallView(APIView):
+    """
+    API View to accept an incoming initiated call and alert the caller to kickstart peer-to-peer connection.
+    """
     def post(self, request, call_id):
+        """
+        Handles POST request to mark call status as ACCEPTED and stamp the answered timestamp.
+        """
         call = (
             Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
         )
@@ -707,7 +820,13 @@ class AcceptCallView(APIView):
 
 
 class RejectCallView(APIView):
+    """
+    API View to explicitly decline/reject an incoming call session.
+    """
     def post(self, request, call_id):
+        """
+        Handles POST request to set call status to DECLINED and notify the origin caller.
+        """
         call = (
             Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
         )
@@ -732,7 +851,13 @@ class RejectCallView(APIView):
 
 
 class EndCallView(APIView):
+    """
+    API View to terminate an ongoing or accepted call session by either party.
+    """
     def post(self, request, call_id):
+        """
+        Handles POST request to finish an active call, record end timestamps, and signal the counterpart over WebSockets.
+        """
         call = (
             Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
         )
@@ -756,8 +881,13 @@ class EndCallView(APIView):
 
 
 class MissedCallView(APIView):
-    """Called by the receiver's client when the incoming call times out locally."""
+    """
+    API View invoked by the receiver client when an incoming call times out without responses locally.
+    """
     def post(self, request, call_id):
+        """
+        Handles POST request to close a timed-out call session and clear ringing interfaces on caller's end.
+        """
         call = (
             Call.objects.select_related("caller", "receiver").filter(id=call_id).first()
         )
@@ -780,7 +910,13 @@ class MissedCallView(APIView):
 
 
 class CallHistoryView(APIView):
+    """
+    API View to retrieve up to the last 100 historical call records for the current user.
+    """
     def get(self, request):
+        """
+        Handles GET request to fetch a list of dictionary representations of user call history.
+        """
         qs = Call.objects.filter(
             Q(caller=request.user) | Q(receiver=request.user)
         ).order_by("-started_at")
@@ -800,16 +936,13 @@ class CallHistoryView(APIView):
 
 class IceServersView(APIView):
     """
-    Returns ICE server configuration for WebRTC.
-
-    For production, set TURN_USERNAME and TURN_CREDENTIAL in env vars and
-    provision a dedicated TURN server (coturn / Metered / Twilio).
-
-    The open-relay entries below are free public TURN servers suitable for
-    development / low-traffic use.
+    API View to expose STUN and TURN credentials/servers configuration details required for WebRTC NAT traversal.
     """
 
     def get(self, request):
+        """
+        Handles GET request returning static development open-relay server nodes or production configured cluster points.
+        """
         import os
 
         turn_username   = os.getenv("TURN_USERNAME",   "openrelayproject")
@@ -845,16 +978,15 @@ class IceServersView(APIView):
 
 class SendEmailView(APIView):
     """
-    POST /api/email/send/
-    Body: { "to": "<user_uuid>", "subject": "...", "body": "..." }
-
-    Sends an e-mail to the registered user via Mailgun, then fires a
-    Firebase push notification so the user is immediately notified.
+    API View to trigger external email delivery via Mailgun and shoot follow-up FCM alerts to receivers.
     """
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """
+        Handles POST request to send custom structural mail templates securely through Mailgun API gateways.
+        """
         s = SendEmailSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
@@ -900,8 +1032,14 @@ class SendEmailView(APIView):
 
 
 class ToggleAutoDeleteView(APIView):
+    """
+    API View to switch auto-deletion behaviors for conversation paths on a given chat workspace.
+    """
 
     def post(self, request, chat_id):
+        """
+        Handles POST request toggling chat participant 'auto_delete' switches and storing the timestamps.
+        """
         cp = ChatParticipant.objects.filter(chat_id=chat_id, user=request.user).first()
         if not cp:
             return Response({"detail": "Forbidden"}, status=403)
@@ -923,9 +1061,15 @@ class ToggleAutoDeleteView(APIView):
 
 
 class MessageEditView(APIView):
+    """
+    API View to patch/edit text payloads of already transmitted chat message logs.
+    """
     permission_classes = [IsChatParticipant]
 
     def patch(self, request, chat_id, msg_id):
+        """
+        Handles PATCH request to modify custom text bodies, validate contents, and alert room members via WebSocket.
+        """
         msg = Message.objects.filter(id=msg_id, chat_id=chat_id).first()
         if not msg:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -953,7 +1097,6 @@ class MessageEditView(APIView):
             },
         )
 
-        # якщо хочеш синхронізацію через WS — можна додати group_send тут
         return Response(
             MessageSerializer(msg, context={"request": request}).data,
             status=status.HTTP_200_OK,

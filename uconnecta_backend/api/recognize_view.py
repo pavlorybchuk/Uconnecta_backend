@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
-
+# Configuration parameters for the recognition service retrieved from environment variables
 RECOGNITION_BASE_URL = os.getenv("RECOGNITION_BASE_URL")
 RECOGNITION_FIELD = "file"
 RECOGNITION_API_KEY = os.getenv("RECOGNITION_API_KEY")
@@ -18,8 +18,17 @@ RECOGNITION_TIMEOUT = (5, 30)
 
 
 class RecognizePhotoView(APIView):
+    """
+    API View to handle processing and recognition of vehicle/plate photos uploaded inside a ZIP archive.
+    Accepts multipart form-data containing the ZIP file.
+    """
     parser_classes = [MultiPartParser, FormParser]
+
     def post(self, request):
+        """
+        Handles POST request to validate the uploaded ZIP archive, extract the image,
+        forward it to the external recognition endpoint, and return the parsed response json.
+        """
         zip_file = request.FILES.get("file")
         if not zip_file:
             return Response(
@@ -85,15 +94,21 @@ class RecognizePhotoView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-
+# Supported static extensions for filtering images inside the archive
 _ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 
 
 class _ZipError(ValueError):
-    """Raised when the ZIP is malformed or contains no usable image."""
+    """
+    Custom Exception raised when the uploaded archive is malformed or contains no usable image file format.
+    """
 
 
 def _extract_image_from_zip(zip_file):
+    """
+    Helper function to open a ZIP file stream, extract the first valid target image entry,
+    and skip OS system-generated folders like __MACOSX.
+    """
     try:
         zf = zipfile.ZipFile(zip_file)
     except zipfile.BadZipFile:
@@ -118,6 +133,10 @@ def _extract_image_from_zip(zip_file):
 
 
 def _call_recognition_api(image_name: str, image_file):
+    """
+    Helper function to perform a multi-part file request to the external computer vision service,
+    injecting authentication keys and appropriate image mime types dynamically.
+    """
 
     ext = image_name.rsplit(".", 1)[-1].lower()
     mime = f"image/{ext}" if ext != "jpg" else "image/jpeg"
